@@ -1,0 +1,13 @@
+{
+  "name": "₱ Tracker",
+  "short_name": "₱ Tracker",
+  "description": "Personal expense and net worth tracker",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f0e17",
+  "theme_color": "#1c1b2e",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>₱ Tracker</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1c1b2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="₱ Tracker">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg:#0f0e17; --surface:#1c1b2e; --surface2:#252438; --border:#312f4f;
+      --text:#fffffe; --muted:#9997b5; --accent:#7c5cbf; --accent-l:#a78bfa;
+      --green:#2cb67d; --red:#ef4565; --yellow:#ffcf77; --blue:#4cc9f0;
+      --nav-h:64px; --r:16px; --rs:10px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+    html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:15px;overscroll-behavior:none}
+    #app{max-width:430px;margin:0 auto;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+    /* HEADER */
+    #header{background:linear-gradient(135deg,#1e1b4b 0%,#2d2670 50%,#4c1d95 100%);padding:16px 18px 18px;flex-shrink:0}
+    .hdr-lbl{font-size:11px;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:1.2px;font-weight:700}
+    .hdr-bal{font-size:32px;font-weight:800;letter-spacing:-1.5px;margin:3px 0 6px}
+    .hdr-pills{display:flex;gap:7px;flex-wrap:wrap}
+    .pill{border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700}
+    .pill.red{background:rgba(239,69,101,.25);color:#ff8fa3}
+    .pill.green{background:rgba(44,182,125,.25);color:#6ee7b7}
+    .pill.muted{background:rgba(255,255,255,.1);color:rgba(255,255,255,.7)}
+
+    /* NAV */
+    #content{flex:1;overflow-y:auto;padding-bottom:var(--nav-h)}
+    #nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;height:var(--nav-h);background:var(--surface);border-top:1px solid var(--border);display:flex;z-index:100}
+    .nb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:var(--muted);border:none;background:none;font-size:9px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;transition:color .2s;padding:0}
+    .nb.active{color:var(--accent-l)}
+    .ni{font-size:19px;line-height:1}
+
+    /* CARDS */
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:15px;margin:0 13px 10px}
+    .card-title{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:13px;font-weight:700}
+
+    /* LOG */
+    .log-top{padding:11px 13px;background:var(--bg);position:sticky;top:0;z-index:10;border-bottom:1px solid var(--border)}
+    .type-tabs{display:flex;gap:5px;margin-bottom:9px}
+    .tt{flex:1;padding:7px 3px;border-radius:9px;border:1.5px solid var(--border);background:var(--surface);color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;text-align:center;transition:all .15s;text-transform:uppercase;letter-spacing:.4px}
+    .tt.active.expense{background:rgba(239,69,101,.18);border-color:var(--red);color:var(--red)}
+    .tt.active.income{background:rgba(44,182,125,.18);border-color:var(--green);color:var(--green)}
+    .tt.active.transfer{background:rgba(76,201,240,.18);border-color:var(--blue);color:var(--blue)}
+    .log-row{display:flex;gap:7px;align-items:flex-start}
+    .log-inp{flex:1;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--rs);padding:11px 12px;color:var(--text);font-size:15px;outline:none;transition:border-color .2s;font-family:inherit}
+    .log-inp:focus{border-color:var(--accent-l)}
+    .log-inp::placeholder{color:var(--muted);font-size:13px}
+    .log-btn{background:var(--accent);color:#fff;border:none;border-radius:var(--rs);padding:0 15px;font-size:22px;cursor:pointer;height:44px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:700;transition:opacity .15s}
+    .log-btn:active{opacity:.75}
+    .log-meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center}
+    .msel{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:5px 10px 5px 11px;color:var(--text);font-size:12px;font-weight:600;outline:none;appearance:none;-webkit-appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239997b5' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 7px center;padding-right:22px}
+    .mamt{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:5px 12px;color:var(--text);font-size:13px;font-weight:700;outline:none;width:120px;transition:border-color .2s}
+    .mamt:focus{border-color:var(--accent-l)}
+    .mamt::placeholder{color:var(--muted);font-weight:400;font-size:12px}
+    .cbadge{display:inline-flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:5px 11px;font-size:12px;font-weight:600;cursor:pointer;transition:border-color .15s}
+    .cbadge:hover{border-color:var(--accent-l)}
+    .amt-prefix{color:var(--muted);font-size:13px;align-self:center;font-weight:700;margin-right:-2px}
+
+    /* TRANSACTIONS */
+    .day-hdr{padding:11px 13px 4px;display:flex;justify-content:space-between;align-items:center}
+    .day-lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)}
+    .day-tot{font-size:12px;font-weight:700}
+    .tx{margin:0 13px 5px;background:var(--surface);border:1px solid var(--border);border-left-width:3px;border-radius:11px;padding:10px 12px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:opacity .15s}
+    .tx:active{opacity:.75}
+    .tx-ico{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+    .tx-info{flex:1;min-width:0}
+    .tx-desc{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .tx-sub{font-size:11px;color:var(--muted);margin-top:2px}
+    .tx-amt{font-size:14px;font-weight:800;flex-shrink:0}
+    .tx-amt.expense{color:var(--red)}
+    .tx-amt.income{color:var(--green)}
+    .tx-amt.transfer{color:var(--blue)}
+    .tx-amt.adjust{color:var(--yellow)}
+    .tx-amt.zero{color:var(--muted);font-style:italic;font-weight:400;font-size:12px}
+
+    /* WALLETS */
+    .wgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:9px 13px}
+    .wcard{background:var(--surface);border:1px solid var(--border);border-top-width:3px;border-radius:var(--r);padding:13px 11px;cursor:pointer;transition:opacity .15s;min-height:108px;display:flex;flex-direction:column}
+    .wcard:active{opacity:.75}
+    .w-ico{font-size:21px;margin-bottom:7px}
+    .w-name{font-size:11px;color:var(--muted);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase;letter-spacing:.4px}
+    .w-bal{font-size:17px;font-weight:800;margin:3px 0 1px;letter-spacing:-.5px}
+    .w-sec{font-size:11px;color:var(--muted)}
+    .w-gain{font-size:12px;font-weight:700;margin-top:2px}
+    .w-gain.pos{color:var(--green)}
+    .w-gain.neg{color:var(--red)}
+    .add-wbtn{background:transparent;border:2px dashed var(--border);border-radius:var(--r);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;color:var(--muted);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;min-height:108px;transition:all .15s}
+    .add-wbtn:hover{border-color:var(--accent-l);color:var(--accent-l)}
+    .fx-bar{margin:9px 13px 0;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;font-size:13px}
+    .fx-lbl{color:var(--muted)}
+    .fx-lbl strong{color:var(--text)}
+    .fx-btn{color:var(--accent-l);font-size:12px;font-weight:700;cursor:pointer;border:none;background:none;padding:3px 7px;border-radius:6px}
+
+    /* STATS */
+    .mnav{display:flex;align-items:center;justify-content:space-between;padding:11px 13px 4px}
+    .mnav-arr{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:5px 12px;color:var(--text);font-size:17px;cursor:pointer}
+    .mnav-lbl{font-weight:700;font-size:15px}
+    .srow{display:flex;gap:8px;margin:0 13px 9px}
+    .scard{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);padding:12px}
+    .s-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);font-weight:700}
+    .s-val{font-size:21px;font-weight:800;margin:3px 0 2px;letter-spacing:-.5px}
+    .s-sub{font-size:11px;color:var(--muted)}
+    .s-val.green{color:var(--green)}
+    .s-val.red{color:var(--red)}
+    .cat-row{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid var(--border)}
+    .cat-row:last-child{border-bottom:none}
+    .cat-ico{width:33px;height:33px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+    .cat-info{flex:1}
+    .cat-nm{font-size:13px;font-weight:600}
+    .cat-bar{height:3px;background:var(--surface2);border-radius:2px;margin-top:3px;overflow:hidden}
+    .cat-fill{height:100%;border-radius:2px}
+    .cat-amt{font-size:13px;font-weight:700}
+    .spike-item{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
+    .spike-item:last-child{border-bottom:none}
+    .spike-tag{font-size:11px;background:var(--red);color:#fff;padding:2px 7px;border-radius:20px;font-weight:700}
+
+    /* ADVISOR */
+    .goal-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);padding:13px;margin-bottom:8px;cursor:pointer;transition:opacity .15s}
+    .goal-card:active{opacity:.75}
+    .goal-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+    .goal-title{font-size:14px;font-weight:700}
+    .goal-pct{font-size:13px;font-weight:800}
+    .goal-pct.on-track{color:var(--green)}
+    .goal-pct.at-risk{color:var(--yellow)}
+    .goal-pct.behind{color:var(--red)}
+    .goal-bar-bg{height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;margin-bottom:5px}
+    .goal-bar-fill{height:100%;border-radius:3px;transition:width .5s ease}
+    .goal-sub{font-size:12px;color:var(--muted)}
+    .add-goal-btn{display:flex;align-items:center;justify-content:center;gap:7px;background:transparent;border:2px dashed var(--border);border-radius:var(--rs);padding:12px;width:100%;color:var(--muted);font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;margin-top:4px}
+    .add-goal-btn:hover{border-color:var(--accent-l);color:var(--accent-l)}
+    .insight-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:15px;margin:0 13px 10px}
+    .insight-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+    .insight-title{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:700}
+    .insight-meta{font-size:11px;color:var(--muted)}
+    .insight-body{font-size:14px;line-height:1.6;color:var(--text)}
+    .insight-body p{margin-bottom:8px}
+    .insight-body p:last-child{margin-bottom:0}
+    .refresh-btn{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:5px 12px;color:var(--accent-l);font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px}
+    .refresh-btn:disabled{opacity:.5;cursor:not-allowed}
+    .insight-placeholder{text-align:center;padding:20px;color:var(--muted);font-size:13px}
+    .nw-hero{background:linear-gradient(135deg,#064e3b,#065f46);border:1px solid #047857;border-radius:var(--r);padding:18px;margin:0 13px 10px;text-align:center}
+    .nw-lbl{font-size:11px;color:rgba(255,255,255,.65);text-transform:uppercase;letter-spacing:1px;font-weight:700}
+    .nw-total{font-size:32px;font-weight:800;letter-spacing:-1px;margin:4px 0 8px}
+    .nw-bk{display:flex;justify-content:center;gap:22px}
+    .nw-bk-lbl{font-size:10px;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.5px}
+    .nw-bk-val{font-size:14px;font-weight:700;margin-top:2px}
+
+    /* SETTINGS */
+    .set-sec{padding:13px 13px 5px;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);font-weight:700}
+    .set-row{background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);padding:12px 13px;margin:0 13px 7px;display:flex;align-items:center;justify-content:space-between;gap:11px}
+    .set-lbl{font-size:14px;font-weight:600}
+    .set-sub{font-size:11px;color:var(--muted);margin-top:2px}
+    .set-inp{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:7px 9px;color:var(--text);font-size:13px;outline:none;text-align:right;width:150px;font-family:inherit}
+    .set-inp:focus{border-color:var(--accent-l)}
+    .set-btn{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:7px 12px;color:var(--text);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .15s}
+    .set-btn:hover{border-color:var(--accent-l);color:var(--accent-l)}
+    .set-btn.ok{border-color:var(--green);color:var(--green)}
+
+    /* MODAL */
+    .mo{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:200;display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(3px)}
+    .mo.hidden{display:none}
+    .md{background:var(--surface);border-radius:22px 22px 0 0;padding:0 17px 30px;width:100%;max-width:430px;border-top:1px solid var(--border);max-height:90vh;overflow-y:auto}
+    .mdh{width:36px;height:4px;background:var(--border);border-radius:2px;margin:10px auto 17px}
+    .mdt{font-size:17px;font-weight:800;margin-bottom:17px}
+    .mf{margin-bottom:12px}
+    .ml{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
+    .mi{width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--rs);padding:10px 12px;color:var(--text);font-size:15px;outline:none;font-family:inherit;transition:border-color .15s}
+    .mi:focus{border-color:var(--accent-l)}
+    .ms{width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--rs);padding:10px 12px;color:var(--text);font-size:15px;outline:none;appearance:none;-webkit-appearance:none;cursor:pointer;font-family:inherit}
+    .ms:focus{border-color:var(--accent-l)}
+    .ma{display:flex;gap:8px;margin-top:17px}
+    .mb{flex:1;padding:12px;border-radius:var(--rs);font-size:14px;font-weight:700;cursor:pointer;border:none;transition:opacity .15s;font-family:inherit}
+    .mb:active{opacity:.8}
+    .mb.primary{background:var(--accent);color:#fff}
+    .mb.danger{background:var(--red);color:#fff}
+    .mb.cancel{background:var(--surface2);color:var(--text)}
+    .mb.success{background:var(--green);color:#fff}
+    .swatches{display:flex;gap:7px;flex-wrap:wrap;padding:3px 0}
+    .sw{width:27px;height:27px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:all .15s}
+    .sw.sel{border-color:#fff;transform:scale(1.2)}
+    .cat-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+    .co{display:flex;align-items:center;gap:8px;background:var(--surface2);border:2px solid var(--border);border-radius:9px;padding:10px 11px;cursor:pointer;transition:border-color .15s;font-size:13px;font-weight:600}
+    .co.sel{border-color:var(--accent-l)}
+    .recon-diff{text-align:center;padding:14px 0;border-top:1px solid var(--border);margin-top:10px}
+    .recon-diff-amt{font-size:24px;font-weight:800;margin:4px 0}
+    .recon-diff-lbl{font-size:12px;color:var(--muted)}
+    .upload-zone{border:2px dashed var(--border);border-radius:var(--rs);padding:20px;text-align:center;cursor:pointer;transition:all .15s;margin:6px 0}
+    .upload-zone:hover{border-color:var(--accent-l)}
+    .upload-zone-ico{font-size:32px;margin-bottom:6px}
+    .upload-zone-txt{font-size:13px;color:var(--muted);font-weight:600}
+    .upload-thumbs{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+    .thumb{width:60px;height:60px;border-radius:7px;object-fit:cover;border:1px solid var(--border)}
+    .progress-bar{height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;margin:8px 0}
+    .progress-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .3s}
+    .goal-type-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:4px}
+    .gt{display:flex;flex-direction:column;align-items:center;gap:6px;background:var(--surface2);border:2px solid var(--border);border-radius:10px;padding:13px 8px;cursor:pointer;transition:all .15s;text-align:center;font-size:12px;font-weight:700}
+    .gt.sel{border-color:var(--accent-l);background:rgba(167,139,250,.1)}
+    .gt-ico{font-size:22px}
+
+    /* MISC */
+    .empty{text-align:center;padding:44px 18px;color:var(--muted)}
+    .empty-ico{font-size:42px;margin-bottom:9px}
+    .empty-txt{font-size:15px;font-weight:600}
+    .empty-sub{font-size:13px;margin-top:4px}
+    .gap{height:16px}
+    .chart-wrap{position:relative}
+    .divider{height:1px;background:var(--border);margin:10px 0}
+    .spin{display:inline-block;animation:spin 1s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .toast{position:fixed;bottom:calc(var(--nav-h) + 12px);left:50%;transform:translateX(-50%) translateY(8px);background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 17px;border-radius:20px;font-size:13px;z-index:300;opacity:0;transition:all .25s;pointer-events:none;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.5)}
+    .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    ::-webkit-scrollbar{width:3px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+  </style>
+</head>
+<body>
+<div id="app">
+  <div id="header"></div>
+  <div id="content"></div>
+  <nav id="nav">
+    <button class="nb active" data-view="log"     onclick="sv('log')"><span class="ni">✏️</span><span>Log</span></button>
+    <button class="nb"        data-view="stats"   onclick="sv('stats')"><span class="ni">📊</span><span>Stats</span></button>
+    <button class="nb"        data-view="wallets" onclick="sv('wallets')"><span class="ni">💳</span><span>Wallets</span></button>
+    <button class="nb"        data-view="advisor" onclick="sv('advisor')"><span class="ni">🎯</span><span>Advisor</span></button>
+    <button class="nb"        data-view="settings"onclick="sv('settings')"><span class="ni">⚙️</span><span>Settings</span></button>
+  </nav>
+</div>
+<div class="mo hidden" id="MO" onclick="handleOC(event)"><div class="md" id="MD"></div></div>
+<div class="toast" id="T"></div>
+
+<script>
+// ═══ CONSTANTS ═══════════════════════════════════════════════════════
+const CATS=[
+  {id:'food',    name:'Food & Drink',      icon:'🍽️',color:'#ef4444',kw:['coffee','lunch','dinner','breakfast','cafe','restaurant','snacks','food','meal','eat','merienda','milk tea','boba','pizza','burger','mcdo','jollibee','kfc','grocery','groceries','carinderia','kape','dessert','shawarma','bbq','ulam']},
+  {id:'transport',name:'Transport',        icon:'🚗',color:'#3b82f6',kw:['grab','uber','taxi','jeep','jeepney','mrt','lrt','bus','gas','parking','fuel','angkas','tricycle','fare','toll','commute','gasoline']},
+  {id:'wellness',name:'Wellness',          icon:'💆',color:'#8b5cf6',kw:['massage','doctor','medicine','pharmacy','gym','health','spa','vitamins','dental','checkup','hospital','clinic','haircut','salon','barbershop','facial','derma','botox']},
+  {id:'shopping',name:'Shopping',          icon:'🛍️',color:'#06b6d4',kw:['clothes','shoes','mall','lazada','shopee','amazon','clothing','shirt','pants','dress','bag','accessories','makeup']},
+  {id:'bills',   name:'Bills & Utilities', icon:'📱',color:'#f59e0b',kw:['electric','water','internet','phone','load','rent','wifi','pldt','meralco','globe','smart','converge','sky','cable','dues','condo','hoa']},
+  {id:'subs',    name:'Subscriptions',     icon:'🎬',color:'#ec4899',kw:['netflix','spotify','disney','youtube','adobe','canva','claude','chatgpt','apple','google','microsoft','office','subscription','streaming','hbo','prime']},
+  {id:'house',   name:'House / Build',     icon:'🏠',color:'#10b981',kw:['house','construction','materials','hardware','cement','tiles','labor','contractor','furniture','appliance','plumbing','electrical','paint','lumber','steel','gravel','sand','hollow blocks','roofing','architect','engineer','renovation','repair','flooring','lot','land']},
+  {id:'entertain',name:'Entertainment',   icon:'🎭',color:'#f97316',kw:['movie','cinema','concert','games','bar','drinks','travel','hotel','airbnb','vacation','flight','ticket','steam','playstation']},
+  {id:'adjust',  name:'Adjustment',        icon:'⚖️',color:'#6b7280',kw:[]},
+  {id:'other',   name:'Other',             icon:'📦',color:'#6b7280',kw:[]}
+];
+const ITYPES=[{id:'salary',label:'Salary',icon:'💼'},{id:'freelance',label:'Freelance / Client',icon:'💻'},{id:'returns',label:'Investment Returns',icon:'📈'},{id:'other',label:'Other',icon:'💰'}];
+const WICONS={credit:'💳',bank:'🏦',ewallet:'📱',usd:'💵',investment:'📈'};
+const WCOLS=['#7c5cbf','#ef4565','#2cb67d','#4cc9f0','#f59e0b','#ec4899','#3b82f6','#10b981','#f97316','#a78bfa'];
+const GTYPES=[
+  {id:'savings_rate',label:'Savings Rate',icon:'💰',desc:'Target savings % of income'},
+  {id:'income_growth',label:'Grow Income',icon:'📈',desc:'Monthly income target'},
+  {id:'fund_goal',label:'Save for Something',icon:'🎯',desc:'Save a specific amount'},
+  {id:'reduce_cat',label:'Reduce Spending',icon:'✂️',desc:'Spend less in a category'},
+  {id:'custom',label:'Custom Goal',icon:'✏️',desc:'Free text goal for AI context'}
+];
+const DEF={version:4,settings:{usdRate:56.5,usdRateDate:null,usdRateManual:null,defaultWalletId:null,proxyUrl:'',apiKey:'',autoRefresh:true},wallets:[],transactions:[],investmentValues:[],goals:[],insights:{text:null,lastUpdated:null}};
+
+// ═══ STATE ═══════════════════════════════════════════════════════════
+let data=clone(DEF),view='log',logType='expense',statsMonth=ym(),pendingCat='other',selColor=WCOLS[0],folderHandle=null,charts={},reconImages=[],genInProgress=false;
+
+// ═══ HELPERS ═════════════════════════════════════════════════════════
+function clone(o){return JSON.parse(JSON.stringify(o))}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
+function today(){return new Date().toISOString().slice(0,10)}
+function ym(d){return(d||new Date().toISOString()).slice(0,7)}
+function prevDay(d){const dt=new Date(d+'T12:00:00');dt.setDate(dt.getDate()-1);return dt.toISOString().slice(0,10)}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function xrate(){return data.settings.usdRateManual||data.settings.usdRate||56.5}
+function toPHP(n,cur){return cur==='USD'?n*xrate():n}
+function fmtPHP(n){if(n===null||n===undefined)return'—';const a=Math.abs(n);const s=a>=1e6?(a/1e6).toFixed(2)+'M':a>=1000?(a/1000).toFixed(1)+'K':a.toLocaleString('en-PH',{maximumFractionDigits:0});return(n<0?'-':'')+'₱'+s}
+function fmtUSD(n){return'$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function fmtDate(d){const t=today();if(d===t)return'Today';if(d===prevDay(t))return'Yesterday';return new Date(d+'T12:00:00').toLocaleDateString('en-PH',{weekday:'short',month:'short',day:'numeric'})}
+function monthLabel(m){const[y,mo]=m.split('-');return new Date(y,mo-1).toLocaleDateString('en-PH',{month:'long',year:'numeric'})}
+function catById(id){return CATS.find(c=>c.id===id)||CATS[CATS.length-1]}
+function wById(id){return data.wallets.find(w=>w.id===id)}
+function defW(){if(data.settings.defaultWalletId){const w=wById(data.settings.defaultWalletId);if(w)return w;}return data.wallets[0]||null}
+function detectCat(text){const lo=text.toLowerCase();for(const c of CATS){if(c.kw.some(k=>lo.includes(k)))return c.id;}return'other'}
+function parseInp(raw){const text=raw.trim();const m=text.match(/(\d[\d,]*(?:\.\d+)?)/);let amount=null,desc=text;if(m){amount=parseFloat(m[1].replace(',',''));desc=text.replace(m[0],'').replace(/\s+/g,' ').trim()||text;}return{desc:desc||text,amount,catId:detectCat(text)}}
+
+// ═══ BALANCE ═════════════════════════════════════════════════════════
+function computeBal(wid){
+  const w=wById(wid);if(!w)return 0;
+  let b=Number(w.openingBalance)||0;
+  data.transactions.forEach(tx=>{
+    if(tx.type==='expense'&&tx.walletId===wid)       b-=Number(tx.amount)||0;
+    else if(tx.type==='income'&&tx.walletId===wid)   b+=Number(tx.amount)||0;
+    else if(tx.type==='adjustment'&&tx.walletId===wid)b+=Number(tx.amount)||0;
+    else if(tx.type==='transfer'){
+      if(tx.fromWalletId===wid)b-=Number(tx.amount)||0;
+      if(tx.toWalletId===wid)  b+=Number(tx.amount)||0;
+    }
+  });
+  return b;
+}
+function latestInv(wid){return data.investmentValues.filter(v=>v.walletId===wid).sort((a,b)=>b.month.localeCompare(a.month))[0]||null}
+function wPHP(wid){const w=wById(wid);if(!w)return 0;if(w.type==='investment'){const inv=latestInv(wid);return inv?toPHP(inv.currentValue,w.currency):toPHP(computeBal(wid),w.currency);}return toPHP(computeBal(wid),w.currency)}
+function netWorth(){return data.wallets.reduce((s,w)=>s+wPHP(w.id),0)}
+function mSpend(m){return data.transactions.filter(t=>t.type==='expense'&&t.date.slice(0,7)===m).reduce((s,t)=>s+(Number(t.amountPHP)||0),0)}
+function mIncome(m){return data.transactions.filter(t=>t.type==='income'&&t.date.slice(0,7)===m).reduce((s,t)=>s+(Number(t.amountPHP)||0),0)}
+
+// ═══ GOAL PROGRESS ════════════════════════════════════════════════════
+function goalProgress(g){
+  const m=ym();
+  const spent=mSpend(m);
+  const inc=mIncome(m);
+  if(g.type==='savings_rate'){
+    const totalInc=inc||g.monthlyIncome||0;
+    const saved=totalInc-spent;
+    const rate=totalInc>0?Math.round((saved/totalInc)*100):0;
+    const pct=Math.min(100,Math.round((rate/(g.targetValue||30))*100));
+    return{current:rate,target:g.targetValue,unit:'%',pct,label:`${rate}% saved vs ${g.targetValue}% target`,status:rate>=g.targetValue?'on-track':rate>=(g.targetValue*.8)?'at-risk':'behind'};
+  }
+  if(g.type==='income_growth'){
+    const pct=g.targetValue?Math.min(100,Math.round((inc/g.targetValue)*100)):0;
+    return{current:inc,target:g.targetValue,unit:'₱',pct,label:`${fmtPHP(inc)} of ${fmtPHP(g.targetValue)} target`,status:pct>=100?'on-track':pct>=80?'at-risk':'behind'};
+  }
+  if(g.type==='fund_goal'){
+    const saved=g.savedAmount||0;
+    const pct=g.targetValue?Math.min(100,Math.round((saved/g.targetValue)*100)):0;
+    return{current:saved,target:g.targetValue,unit:'₱',pct,label:`${fmtPHP(saved)} of ${fmtPHP(g.targetValue)} saved`,status:pct>=100?'on-track':pct>=60?'at-risk':'behind'};
+  }
+  if(g.type==='reduce_cat'){
+    const catSpent=data.transactions.filter(t=>t.type==='expense'&&t.date.slice(0,7)===m&&t.cat===g.categoryId).reduce((s,t)=>s+(Number(t.amountPHP)||0),0);
+    const pct=g.targetValue?Math.max(0,Math.round(((g.targetValue-catSpent)/g.targetValue)*100)):0;
+    return{current:catSpent,target:g.targetValue,unit:'₱',pct,label:`${fmtPHP(catSpent)} spent vs ${fmtPHP(g.targetValue)} limit`,status:catSpent<=g.targetValue?'on-track':catSpent<=(g.targetValue*1.2)?'at-risk':'behind'};
+  }
+  return{pct:0,label:g.notes||'Custom goal',status:'at-risk'};
+}
+
+// ═══ STORAGE ═════════════════════════════════════════════════════════
+function saveLocal(){try{localStorage.setItem('pt4',JSON.stringify(data));}catch(e){}}
+function loadLocal(){try{const r=localStorage.getItem('pt4');if(r)data={...clone(DEF),...JSON.parse(r)};}catch(e){}}
+async function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open('ptDB',3);r.onupgradeneeded=e=>{try{e.target.result.createObjectStore('kv');}catch(x){}};r.onsuccess=e=>res(e.target.result);r.onerror=rej;})}
+async function dbGet(k){const db=await openDB();return new Promise((res,rej)=>{const r=db.transaction('kv','readonly').objectStore('kv').get(k);r.onsuccess=e=>res(e.target.result);r.onerror=rej;})}
+async function dbSet(k,v){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction('kv','readwrite');tx.objectStore('kv').put(v,k);tx.oncomplete=res;tx.onerror=rej;})}
+async function save(){if(!folderHandle){saveLocal();return;}try{const fh=await folderHandle.getFileHandle('tracker-data.json',{create:true});const w=await fh.createWritable();await w.write(JSON.stringify(data,null,2));await w.close();saveLocal();}catch(e){saveLocal();}}
+async function loadFromFolder(){if(!folderHandle){loadLocal();return;}try{const fh=await folderHandle.getFileHandle('tracker-data.json');data={...clone(DEF),...JSON.parse(await(await fh.getFile()).text())};saveLocal();}catch(e){loadLocal();}}
+async function connectFolder(){if(!('showDirectoryPicker'in window)){toast('Use Chrome or Edge for folder sync.');return;}try{folderHandle=await window.showDirectoryPicker({mode:'readwrite',startIn:'documents'});await dbSet('fh',folderHandle);await loadFromFolder();await save();toast('✅ Connected to Google Drive folder!');renderView();updateHdr();}catch(e){if(e.name!=='AbortError')toast('Could not connect.');}}
+async function tryRestoreFolder(){try{const h=await dbGet('fh');if(!h)return;const p=await h.queryPermission({mode:'readwrite'});if(p==='granted'){folderHandle=h;await loadFromFolder();}else{const r=await h.requestPermission({mode:'readwrite'});if(r==='granted'){folderHandle=h;await loadFromFolder();}}}catch(e){}}
+function exportData(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.download=`tracker-${today()}.json`;a.click();toast('Exported!');}
+function importData(){const inp=document.createElement('input');inp.type='file';inp.accept='.json';inp.onchange=async e=>{const file=e.target.files[0];if(!file)return;try{const imp=JSON.parse(await file.text());if(!imp.wallets)throw 0;data={...clone(DEF),...imp};await save();toast('✅ Imported!');renderView();updateHdr();}catch(e){toast('Invalid file.');}};inp.click();}
+
+// ═══ FX RATE ═════════════════════════════════════════════════════════
+async function fetchRate(){try{const r=await fetch('https://open.er-api.com/v6/latest/USD');const j=await r.json();if(j.result==='success'&&j.rates.PHP){data.settings.usdRate=j.rates.PHP;data.settings.usdRateDate=today();await save();}}catch(e){}}
+
+// ═══ CLAUDE API ══════════════════════════════════════════════════════
+async function compressImage(dataUrl){
+  return new Promise(resolve=>{
+    const img=new Image();
+    img.onload=()=>{
+      const MAX=1200;let w=img.width,h=img.height;
+      if(w>h&&w>MAX){h=Math.round(h*MAX/w);w=MAX;}
+      else if(h>MAX){w=Math.round(w*MAX/h);h=MAX;}
+      const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      resolve(canvas.toDataURL('image/jpeg',0.65));
+    };
+    img.src=dataUrl;
+  });
+}
+
+async function callClaude(messages){
+  const proxy=data.settings.proxyUrl;
+  if(!proxy){toast('Set up your Claude proxy URL in Settings.');return null;}
+  try{
+    const res=await fetch(proxy,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1024,messages})});
+    if(!res.ok)throw new Error(await res.text());
+    const j=await res.json();
+    return j.content?.[0]?.text||null;
+  }catch(e){toast('API error: '+e.message);return null;}
+}
+
+async function generateInsights(){
+  if(genInProgress){toast('Already generating...');return;}
+  genInProgress=true;
+  const btn=document.getElementById('refreshBtn');
+  if(btn){btn.disabled=true;btn.innerHTML='<span class="spin">↻</span> Generating...';}
+
+  const m=ym();const spent=mSpend(m);const inc=mIncome(m);
+  const rate=inc>0?Math.round(((inc-spent)/inc)*100):null;
+  const nw=netWorth();
+  const catTots={};
+  data.transactions.filter(t=>t.type==='expense'&&t.date.slice(0,7)===m).forEach(t=>{catTots[t.cat]=(catTots[t.cat]||0)+(Number(t.amountPHP)||0);});
+  const catBreakdown=Object.entries(catTots).sort((a,b)=>b[1]-a[1]).map(([id,amt])=>`  ${catById(id).name}: ${fmtPHP(amt)}`).join('\n');
+  const goalsText=data.goals.filter(g=>g.active).map(g=>{const p=goalProgress(g);return`  - ${g.title}: ${p.label} (${p.status})`;}).join('\n')||'  No goals set yet.';
+
+  const prompt=`You are a personal financial advisor for Raffy, a freelance web consultant in the Philippines. Analyze his data and give sharp, specific insights.
+
+CURRENT DATA (${monthLabel(m)}):
+- Net Worth: ${fmtPHP(nw)}
+- Income this month: ${fmtPHP(inc)}
+- Spending this month: ${fmtPHP(spent)}
+- Savings rate: ${rate!==null?rate+'%':'unknown'}
+
+SPENDING BY CATEGORY:
+${catBreakdown||'  No expenses logged yet.'}
+
+GOALS:
+${goalsText}
+
+Write 3-4 short paragraphs:
+1. This month's financial health snapshot (be specific with numbers)
+2. Goal progress — what's on track, what's at risk
+3. One pattern or concern you notice (with a specific number or comparison)
+4. One concrete action to take this week
+
+Be direct and conversational. Use ₱ for peso amounts. Keep it under 220 words. No bullet points — write in short paragraphs.`;
+
+  const result=await callClaude([{role:'user',content:prompt}]);
+  genInProgress=false;
+  if(result){
+    data.insights={text:result,lastUpdated:new Date().toISOString()};
+    await save();
+    if(view==='advisor')renderView();
+    toast('✅ Insights updated!');
+  } else {
+    if(btn){btn.disabled=false;btn.innerHTML='↻ Refresh';}
+  }
+}
+
+async function readScreenshots(images){
+  const compressed=await Promise.all(images.map(compressImage));
+  const content=[{type:'text',text:'These are screenshots of bank/investment account balances. For each screenshot, identify the account name/bank and the current balance shown. Return ONLY valid JSON array like: [{"bank":"BDO Savings","balance":48200,"currency":"PHP"}]. If you cannot read a screenshot clearly, include {"bank":"Unknown","balance":null,"currency":"PHP"}.'}];
+  compressed.forEach((img,i)=>{content.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:img.split(',')[1]}});});
+  const result=await callClaude([{role:'user',content}]);
+  if(!result)return null;
+  try{const match=result.match(/\[[\s\S]*\]/);return match?JSON.parse(match[0]):null;}catch(e){return null;}
+}
+
+// ═══ VIEWS ═══════════════════════════════════════════════════════════
+function sv(v){view=v;document.querySelectorAll('.nb').forEach(b=>b.classList.toggle('active',b.dataset.view===v));destroyCharts();renderView();updateHdr();}
+function renderView(){
+  const c=document.getElementById('content');c.innerHTML='';
+  if(view==='log'){c.innerHTML=buildLog();initLogEv();}
+  else if(view==='stats'){c.innerHTML=buildStats();setTimeout(initStatsChart,50);}
+  else if(view==='wallets'){c.innerHTML=buildWallets();}
+  else if(view==='advisor'){c.innerHTML=buildAdvisor();setTimeout(initNWChart,50);}
+  else{c.innerHTML=buildSettings();}
+}
+
+// ── HEADER ────────────────────────────────
+function updateHdr(){
+  const nw=netWorth(),m=view==='stats'?statsMonth:ym();
+  const spent=mSpend(m),inc=mIncome(m)||0;
+  const saved=inc-spent,pct=inc>0?Math.round((saved/inc)*100):null;
+  document.getElementById('header').innerHTML=`
+    <div class="hdr-lbl">Net Worth</div>
+    <div class="hdr-bal">${fmtPHP(nw)}</div>
+    <div class="hdr-pills">
+      <span class="pill red">Spent ${fmtPHP(spent)}</span>
+      ${pct!==null?`<span class="pill ${pct>=0?'green':'red'}">Saved ${pct}%</span>`:`<span class="pill muted">${monthLabel(m)}</span>`}
+    </div>`;
+}
+
+// ── LOG VIEW ──────────────────────────────
+function buildLog(){
+  const dw=defW();
+  const wOpts=data.wallets.map(w=>`<option value="${w.id}">${WICONS[w.type]||'💳'} ${esc(w.name)}</option>`).join('');
+  const noW=data.wallets.length===0;
+  const txs=data.transactions.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,60);
+  const grouped={};txs.forEach(tx=>{(grouped[tx.date]=grouped[tx.date]||[]).push(tx);});
+  const selWid=dw?.id||'';
+  const selW=wById(selWid);
+  const isUSD=selW?.currency==='USD';
+
+  return`
+    <div class="log-top">
+      <div class="type-tabs">
+        <div class="tt ${logType==='expense'?'active expense':''}"  onclick="setLT('expense')">💸 Expense</div>
+        <div class="tt ${logType==='income'?'active income':''}"   onclick="setLT('income')">💰 Income</div>
+        <div class="tt ${logType==='transfer'?'active transfer':''}" onclick="setLT('transfer')">↔ Transfer</div>
+      </div>
+      <div class="log-row">
+        <input class="log-inp" id="logInp" type="text" autocomplete="off" autocorrect="off"
+          placeholder="${logType==='expense'?'massage 800 · coffee · grab 120':logType==='income'?'Description (optional)':'Note (optional)'}"/>
+        <button class="log-btn" onclick="submitLog()">+</button>
+      </div>
+      ${noW?'':logType==='expense'?`
+        <div class="log-meta">
+          <span class="amt-prefix" id="amtPrefix">${isUSD?'$':'₱'}</span>
+          <input class="mamt" id="amtInp" type="number" inputmode="decimal" placeholder="Amount" style="width:100px"/>
+          <select class="msel" id="walInp" onchange="onWalChange()">${wOpts}</select>
+          <span class="cbadge" onclick="openCatPicker()" id="catBadge">
+            <span id="catIco">${catById(pendingCat).icon}</span>
+            <span id="catNm">${catById(pendingCat).name}</span>
+          </span>
+        </div>`:logType==='income'?`
+        <div class="log-meta">
+          <input class="mamt" id="incAmtInp" type="number" inputmode="decimal" placeholder="₱ Amount"/>
+          <select class="msel" id="incTypeInp">${ITYPES.map(t=>`<option value="${t.id}">${t.icon} ${t.label}</option>`).join('')}</select>
+          <select class="msel" id="incWalInp">${wOpts}</select>
+        </div>`:`
+        <div class="log-meta" style="align-items:center">
+          <select class="msel" id="fromInp">${wOpts}</select>
+          <span style="color:var(--muted);font-size:16px">→</span>
+          <select class="msel" id="toInp">${wOpts}</select>
+          <input class="mamt" id="trAmtInp" type="number" inputmode="decimal" placeholder="Amount"/>
+        </div>`}
+    </div>
+    ${noW?`<div class="empty"><div class="empty-ico">💳</div><div class="empty-txt">Add a wallet first</div><div class="empty-sub">Go to the Wallets tab</div></div>`:
+      Object.keys(grouped).length?Object.keys(grouped).map(d=>{
+        const dayTxs=grouped[d];
+        const daySpend=dayTxs.filter(t=>t.type==='expense').reduce((s,t)=>s+(Number(t.amountPHP)||0),0);
+        return`<div class="day-hdr"><span class="day-lbl">${fmtDate(d)}</span>${daySpend?`<span class="day-tot">${fmtPHP(daySpend)}</span>`:''}</div>${dayTxs.map(buildTxRow).join('')}`;
+      }).join(''):`<div class="empty"><div class="empty-ico">✏️</div><div class="empty-txt">No transactions yet</div><div class="empty-sub">Start typing above</div></div>`}`;
+}
+
+function buildTxRow(tx){
+  const c=catById(tx.cat);
+  const w=wById(tx.walletId||tx.fromWalletId);
+  if(tx.type==='transfer'){
+    const tw=wById(tx.toWalletId);
+    return`<div class="tx" style="border-left-color:#4cc9f0" onclick="openEditModal('${tx.id}')"><div class="tx-ico" style="background:rgba(76,201,240,.15)">↔</div><div class="tx-info"><div class="tx-desc">${esc(tx.desc||'Transfer')}</div><div class="tx-sub">${esc(w?.name||'')} → ${esc(tw?.name||'')}</div></div><div class="tx-amt transfer">${fmtPHP(tx.amount)}</div></div>`;
+  }
+  if(tx.type==='adjustment'){
+    return`<div class="tx" style="border-left-color:#6b7280" onclick="openEditModal('${tx.id}')"><div class="tx-ico" style="background:rgba(107,114,128,.15)">⚖️</div><div class="tx-info"><div class="tx-desc">${esc(tx.desc||'Reconciliation Adjustment')}</div><div class="tx-sub">Adjustment · ${esc(w?.name||'')}</div></div><div class="tx-amt adjust">${tx.amount>=0?'+':''}${fmtPHP(tx.amountPHP||tx.amount)}</div></div>`;
+  }
+  const iUSD=w?.currency==='USD';
+  const amtStr=tx.type==='income'?`+${iUSD?fmtUSD(tx.amount)+' ':''}`+fmtPHP(tx.amountPHP||tx.amount):tx.amount?`-${iUSD?fmtUSD(tx.amount)+' ':''}`+fmtPHP(tx.amountPHP||tx.amount):'No amount';
+  const amtCls=tx.type==='income'?'income':tx.amount?'expense':'zero';
+  return`<div class="tx" style="border-left-color:${c.color}" onclick="openEditModal('${tx.id}')"><div class="tx-ico" style="background:${c.color}1a">${c.icon}</div><div class="tx-info"><div class="tx-desc">${esc(tx.desc)}</div><div class="tx-sub">${c.name}${w?' · '+esc(w.name):''}</div></div><div class="tx-amt ${amtCls}">${amtStr}</div></div>`;
+}
+
+function setLT(t){logType=t;renderView();setTimeout(()=>document.getElementById('logInp')?.focus(),50);}
+function onWalChange(){
+  const wid=document.getElementById('walInp')?.value;
+  const w=wById(wid);const isUSD=w?.currency==='USD';
+  const prefix=document.getElementById('amtPrefix');
+  if(prefix)prefix.textContent=isUSD?'$':'₱';
+}
+
+function initLogEv(){
+  const inp=document.getElementById('logInp');if(!inp)return;
+  if(logType==='expense'){
+    inp.addEventListener('input',()=>{
+      const{catId}=parseInp(inp.value);const c=catById(catId);pendingCat=catId;
+      const ico=document.getElementById('catIco');const nm=document.getElementById('catNm');
+      if(ico)ico.textContent=c.icon;if(nm)nm.textContent=c.name;
+    });
+  }
+  ['logInp','amtInp','incAmtInp','trAmtInp'].forEach(id=>{document.getElementById(id)?.addEventListener('keydown',e=>{if(e.key==='Enter')submitLog();});});
+  // Set default wallet in transfer dropdowns to different wallets
+  const fromInp=document.getElementById('fromInp');
+  const toInp=document.getElementById('toInp');
+  if(fromInp&&toInp&&data.wallets.length>=2){toInp.selectedIndex=1;}
+}
+
+async function submitLog(){
+  if(data.wallets.length===0){toast('Add a wallet first!');return;}
+  const inp=document.getElementById('logInp');
+  if(logType==='expense'){
+    const raw=inp.value.trim();
+    const{desc,amount:pa,catId}=parseInp(raw||'expense');
+    const amount=Number(document.getElementById('amtInp')?.value)||pa||0;
+    const walletId=document.getElementById('walInp')?.value;
+    const w=wById(walletId);const cur=w?.currency||'PHP';
+    if(!raw&&!amount){toast('Enter a description or amount.');return;}
+    await addTx({date:today(),type:'expense',desc:desc||raw,amount,amountPHP:toPHP(amount,cur),cat:pendingCat||catId,walletId});
+    inp.value='';const ai=document.getElementById('amtInp');if(ai)ai.value='';
+    toast(`${catById(pendingCat||catId).icon} ${desc||raw}${amount?' — '+fmtPHP(toPHP(amount,cur)):''}`);
+  }else if(logType==='income'){
+    const amount=Number(document.getElementById('incAmtInp')?.value);
+    if(!amount){toast('Enter an amount.');return;}
+    const walletId=document.getElementById('incWalInp')?.value;
+    const incomeType=document.getElementById('incTypeInp')?.value||'other';
+    const desc=inp.value.trim()||ITYPES.find(t=>t.id===incomeType)?.label||'Income';
+    const w=wById(walletId);const amountPHP=toPHP(amount,w?.currency||'PHP');
+    await addTx({date:today(),type:'income',desc,amount,amountPHP,cat:'other',walletId,incomeType});
+    inp.value='';document.getElementById('incAmtInp').value='';
+    toast(`💰 +${fmtPHP(amountPHP)} logged`);
+  }else{
+    const amount=Number(document.getElementById('trAmtInp')?.value);
+    if(!amount){toast('Enter an amount.');return;}
+    const fromWalletId=document.getElementById('fromInp')?.value;
+    const toWalletId=document.getElementById('toInp')?.value;
+    if(fromWalletId===toWalletId){toast('Pick two different wallets.');return;}
+    const desc=inp.value.trim()||'Transfer';
+    await addTx({date:today(),type:'transfer',desc,amount,amountPHP:amount,cat:'other',fromWalletId,toWalletId});
+    inp.value='';document.getElementById('trAmtInp').value='';
+    const fw=wById(fromWalletId),tw=wById(toWalletId);
+    toast(`↔ ${fw?.name} → ${tw?.name} — ${fmtPHP(amount)}`);
+  }
+  renderView();updateHdr();
+}
+
+// ── STATS VIEW ────────────────────────────
+function buildStats(){
+  const exps=data.transactions.filter(t=>t.type==='expense'&&t.date.slice(0,7)===statsMonth);
+  const incs=data.transactions.filter(t=>t.type==='income'&&t.date.slice(0,7)===statsMonth);
+  const spent=exps.reduce((s,t)=>s+(Number(t.amountPHP)||0),0);
+  const inc=incs.reduce((s,t)=>s+(Number(t.amountPHP)||0),0)||0;
+  const saved=inc-spent;const pct=inc>0?Math.round((saved/inc)*100):null;
+  const catTots={};exps.forEach(t=>{catTots[t.cat]=(catTots[t.cat]||0)+(Number(t.amountPHP)||0);});
+  const usedCats=CATS.filter(c=>catTots[c.id]).sort((a,b)=>catTots[b.id]-catTots[a.id]);
+  const maxAmt=usedCats.length?catTots[usedCats[0].id]:1;
+  const spikes=detectSpikes(statsMonth);
+  return`
+    <div class="mnav">
+      <button class="mnav-arr" onclick="chgSM(-1)">‹</button>
+      <span class="mnav-lbl">${monthLabel(statsMonth)}</span>
+      <button class="mnav-arr" onclick="chgSM(1)">›</button>
+    </div>
+    <div class="srow">
+      <div class="scard"><div class="s-lbl">Spent</div><div class="s-val red">${fmtPHP(spent)}</div><div class="s-sub">${exps.length} txns</div></div>
+      <div class="scard"><div class="s-lbl">Saved</div><div class="s-val ${saved>=0?'green':'red'}">${pct!==null?pct+'%':'—'}</div><div class="s-sub">${fmtPHP(Math.abs(saved))}</div></div>
+    </div>
+    ${usedCats.length?`
+    <div class="card"><div class="card-title">By Category</div><div class="chart-wrap" style="height:195px"><canvas id="catChart"></canvas></div></div>
+    <div class="card"><div class="card-title">Breakdown</div>
+      ${usedCats.map(c=>`<div class="cat-row"><div class="cat-ico" style="background:${c.color}1a">${c.icon}</div><div class="cat-info"><div class="cat-nm">${c.name}</div><div class="cat-bar"><div class="cat-fill" style="width:${Math.round(catTots[c.id]/maxAmt*100)}%;background:${c.color}"></div></div></div><div class="cat-amt">${fmtPHP(catTots[c.id])}</div></div>`).join('')}
+    </div>`:`<div class="empty"><div class="empty-ico">📊</div><div class="empty-txt">No expenses this month</div></div>`}
+    ${spikes.length?`<div class="card"><div class="card-title">⚠️ Unusual Spending</div>${spikes.map(s=>`<div class="spike-item"><div><div style="font-weight:700">${catById(s.catId).icon} ${catById(s.catId).name}</div><div style="font-size:11px;color:var(--muted)">${fmtPHP(Math.round(s.avg))} avg → ${fmtPHP(s.current)}</div></div><span class="spike-tag">+${s.pct}%</span></div>`).join('')}</div>`:''}
+    <div class="gap"></div>`;
+}
+function chgSM(d){const[y,m]=statsMonth.split('-').map(Number);statsMonth=new Date(y,m-1+d,1).toISOString().slice(0,7);destroyCharts();renderView();updateHdr();}
+function detectSpikes(month){
+  const cur={};data.transactions.filter(t=>t.type==='expense'&&t.date.slice(0,7)===month).forEach(t=>{cur[t.cat]=(cur[t.cat]||0)+(Number(t.amountPHP)||0);});
+  const spikes=[];
+  for(const[cid,current]of Object.entries(cur)){
+    const prevMs=[-3,-2,-1].map(d=>{const dt=new Date(month+'-01');dt.setMonth(dt.getMonth()+d);return dt.toISOString().slice(0,7);});
+    const vals=prevMs.map(m=>data.transactions.filter(t=>t.type==='expense'&&t.date.slice(0,7)===m&&t.cat===cid).reduce((s,t)=>s+(Number(t.amountPHP)||0),0)).filter(v=>v>0);
+    if(vals.length<2)continue;
+    const avg=vals.reduce((s,v)=>s+v,0)/vals.length;
+    const pct=Math.round(((current-avg)/avg)*100);
+    if(pct>=30)spikes.push({catId:cid,current,avg,pct});
+  }
+  return spikes.sort((a,b)=>b.pct-a.pct);
+}
+function initStatsChart(){
+  const canvas=document.getElementById('catChart');if(!canvas)return;
+  const exps=data.transactions.filter(t=>t.type==='expense'&&t.date.slice(0,7)===statsMonth);
+  const catTots={};exps.forEach(t=>{catTots[t.cat]=(catTots[t.cat]||0)+(Number(t.amountPHP)||0);});
+  const used=CATS.filter(c=>catTots[c.id]);if(!used.length)return;
+  charts.cat=new Chart(canvas,{type:'doughnut',data:{labels:used.map(c=>`${c.icon} ${c.name}`),datasets:[{data:used.map(c=>catTots[c.id]),backgroundColor:used.map(c=>c.color),borderWidth:0,hoverOffset:8}]},options:{responsive:true,maintainAspectRatio:false,cutout:'62%',plugins:{legend:{position:'right',labels:{color:'#9997b5',font:{size:11},boxWidth:11,padding:5}},tooltip:{callbacks:{label:ctx=>` ${fmtPHP(ctx.raw)}`}}}}});
+}
+
+// ── WALLETS VIEW ──────────────────────────
+function buildWallets(){
+  const hasUSD=data.wallets.some(w=>w.currency==='USD');
+  const r=xrate();const rd=data.settings.usdRateDate;
+  return`
+    ${hasUSD?`<div class="fx-bar"><span class="fx-lbl">$1 = <strong>₱${r.toFixed(2)}</strong> ${rd?'· Updated '+rd:''}</span><button class="fx-btn" onclick="openFXModal()">Edit</button></div>`:''}
+    <div class="wgrid">
+      ${data.wallets.map(w=>buildWCard(w)).join('')}
+      <button class="add-wbtn" onclick="openAddWModal()"><span style="font-size:25px">+</span><span>Add Wallet</span></button>
+    </div><div class="gap"></div>`;
+}
+function buildWCard(w){
+  const bal=computeBal(w.id);const color=w.color||'#7c5cbf';
+  let balStr,extra='';
+  if(w.type==='investment'){
+    const inv=latestInv(w.id);
+    balStr=inv?fmtPHP(toPHP(inv.currentValue,w.currency)):fmtPHP(toPHP(bal,w.currency));
+    if(inv){const gain=inv.currentValue-(inv.costBasis||0);const pct=inv.costBasis?((gain/inv.costBasis)*100).toFixed(1):0;extra=`<div class="w-sec">Cost ${fmtPHP(inv.costBasis||0)}</div><div class="w-gain ${gain>=0?'pos':'neg'}">${gain>=0?'+':''}${fmtPHP(gain)} (${gain>=0?'+':''}${pct}%)</div>`;}
+    else extra=`<div class="w-sec">Tap to update</div>`;
+  }else if(w.currency==='USD'){balStr=fmtUSD(bal);extra=`<div class="w-sec">≈ ${fmtPHP(toPHP(bal,'USD'))}</div>`;}
+  else balStr=fmtPHP(bal);
+  const fn=w.type==='investment'?`openInvModal('${w.id}')`:`openWModal('${w.id}')`;
+  return`<div class="wcard" style="border-top-color:${color}" onclick="${fn}"><div class="w-ico">${w.icon||'💳'}</div><div class="w-name">${esc(w.name)}</div><div class="w-bal">${balStr}</div>${extra}</div>`;
+}
+
+// ── ADVISOR VIEW ──────────────────────────
+function buildAdvisor(){
+  const goals=data.goals.filter(g=>g.active);
+  const ins=data.insights;
+  const lastUp=ins.lastUpdated?new Date(ins.lastUpdated).toLocaleString('en-PH',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'Never';
+  const hasProxy=!!data.settings.proxyUrl;
+  const nw=netWorth();
+  const cash=data.wallets.filter(w=>w.type!=='investment').reduce((s,w)=>s+wPHP(w.id),0);
+  const inv=data.wallets.filter(w=>w.type==='investment').reduce((s,w)=>s+wPHP(w.id),0);
+  const months=[...new Set(data.transactions.map(t=>t.date.slice(0,7)))].sort().slice(-12);
+
+  return`
+    <div class="card" style="margin-top:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:13px">
+        <div class="card-title" style="margin-bottom:0">🎯 My Goals</div>
+        <button class="fx-btn" onclick="openAddGoalModal()">+ Add</button>
+      </div>
+      ${goals.length?goals.map(g=>{
+        const p=goalProgress(g);
+        return`<div class="goal-card" onclick="openEditGoalModal('${g.id}')">
+          <div class="goal-hdr"><span class="goal-title">${esc(g.title)}</span><span class="goal-pct ${p.status}">${p.pct}%</span></div>
+          <div class="goal-bar-bg"><div class="goal-bar-fill" style="width:${p.pct}%;background:${p.status==='on-track'?'var(--green)':p.status==='at-risk'?'var(--yellow)':'var(--red)'}"></div></div>
+          <div class="goal-sub">${esc(p.label)}</div>
+        </div>`;}).join(''):`<div style="text-align:center;padding:16px;color:var(--muted);font-size:13px">No goals yet — tap + Add to set one</div>`}
+    </div>
+
+    <div class="insight-card">
+      <div class="insight-hdr">
+        <div class="insight-title">🤖 Claude's Take</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="insight-meta">Updated: ${lastUp}</span>
+          <button class="refresh-btn" id="refreshBtn" onclick="generateInsights()" ${!hasProxy?'disabled title="Set up proxy URL in Settings first"':''}>↻ Refresh</button>
+        </div>
+      </div>
+      ${ins.text?`<div class="insight-body">${ins.text.split('\n\n').map(p=>`<p>${esc(p)}</p>`).join('')}</div>`
+        :hasProxy?`<div class="insight-placeholder">Tap ↻ Refresh to generate your first AI insight.<br><br>Claude will analyze your spending, goals, and net worth.</div>`
+        :`<div class="insight-placeholder">🔑 Add your Claude proxy URL in Settings to enable AI insights.<br><br>Your spending data + goals will be analyzed and summarized here daily.</div>`}
+    </div>
+
+    <div class="nw-hero">
+      <div class="nw-lbl">Net Worth</div>
+      <div class="nw-total">${fmtPHP(nw)}</div>
+      <div class="nw-bk">
+        <div><div class="nw-bk-lbl">Cash & Banks</div><div class="nw-bk-val">${fmtPHP(cash)}</div></div>
+        <div><div class="nw-bk-lbl">Investments</div><div class="nw-bk-val">${fmtPHP(inv)}</div></div>
+      </div>
+    </div>
+
+    ${data.wallets.length?`<div class="card"><div class="card-title">All Accounts</div>
+      ${data.wallets.map(w=>{const b=wPHP(w.id);return`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)"><span style="font-size:18px">${w.icon||'💳'}</span><span style="flex:1;font-size:14px;font-weight:600">${esc(w.name)}</span><span style="font-size:14px;font-weight:800;color:${b<0?'var(--red)':'var(--text)'}">${fmtPHP(b)}</span></div>`;}).join('')}
+    </div>`:''}
+
+    ${months.length>=2?`<div class="card"><div class="card-title">Net Worth Trend</div><div class="chart-wrap" style="height:170px"><canvas id="nwChart"></canvas></div></div>`:''}
+    <div class="gap"></div>`;
+}
+
+function initNWChart(){
+  const canvas=document.getElementById('nwChart');if(!canvas||data.wallets.length<1)return;
+  const months=[...new Set(data.transactions.map(t=>t.date.slice(0,7)))].sort();if(months.length<2)return;
+  const history=months.map(m=>{
+    const endDate=m+'-31';let total=0;
+    data.wallets.forEach(w=>{
+      if(w.type==='investment'){const snaps=data.investmentValues.filter(v=>v.walletId===w.id&&v.month<=m).sort((a,b)=>b.month.localeCompare(a.month));if(snaps[0]){total+=toPHP(snaps[0].currentValue,w.currency);return;}}
+      let b=Number(w.openingBalance)||0;
+      data.transactions.filter(tx=>tx.date<=endDate).forEach(tx=>{
+        if(tx.type==='expense'&&tx.walletId===w.id)b-=Number(tx.amount)||0;
+        else if((tx.type==='income'||tx.type==='adjustment')&&tx.walletId===w.id)b+=Number(tx.amount)||0;
+        else if(tx.type==='transfer'){if(tx.fromWalletId===w.id)b-=Number(tx.amount)||0;if(tx.toWalletId===w.id)b+=Number(tx.amount)||0;}
+      });
+      total+=toPHP(b,w.currency);
+    });
+    return{m,total};
+  });
+  charts.nw=new Chart(canvas,{type:'line',data:{labels:history.map(h=>h.m.slice(5)),datasets:[{data:history.map(h=>h.total),borderColor:'#2cb67d',backgroundColor:'rgba(44,182,125,.1)',fill:true,tension:.35,pointRadius:4,pointBackgroundColor:'#2cb67d'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmtPHP(ctx.raw)}}},scales:{x:{grid:{color:'#312f4f'},ticks:{color:'#9997b5',font:{size:11}}},y:{grid:{color:'#312f4f'},ticks:{color:'#9997b5',font:{size:11},callback:v=>'₱'+(v>=1e6?(v/1e6).toFixed(1)+'M':v>=1000?(v/1000).toFixed(0)+'K':v)}}}}});
+}
+
+// ── SETTINGS VIEW ─────────────────────────
+function buildSettings(){
+  const ok=!!folderHandle;
+  return`
+    <div class="set-sec">Claude AI</div>
+    <div class="set-row"><div><div class="set-lbl">Proxy URL</div><div class="set-sub">Cloudflare Worker URL for Claude API</div></div><input class="set-inp" type="url" placeholder="https://..." value="${esc(data.settings.proxyUrl||'')}" onchange="setSetting('proxyUrl',this.value)" style="width:160px;font-size:11px"/></div>
+    <div class="set-sec">Finance</div>
+    <div class="set-row"><div><div class="set-lbl">Default Wallet</div><div class="set-sub">Pre-selected for expenses</div></div><select class="set-inp" style="width:auto;padding:7px 8px" onchange="setSetting('defaultWalletId',this.value)">${data.wallets.map(w=>`<option value="${w.id}" ${w.id===data.settings.defaultWalletId?'selected':''}>${w.icon||''} ${esc(w.name)}</option>`).join('')}</select></div>
+    <div class="set-sec">Data & Sync</div>
+    <div class="set-row"><div><div class="set-lbl">Google Drive Folder</div><div class="set-sub">${ok?'✅ Auto-saving to your folder':'Save data directly to Drive'}</div></div><button class="set-btn ${ok?'ok':''}" onclick="connectFolder()">${ok?'Reconnect':'Connect'}</button></div>
+    <div class="set-row"><div><div class="set-lbl">Export Backup</div><div class="set-sub">Download as JSON</div></div><button class="set-btn" onclick="exportData()">Export</button></div>
+    <div class="set-row"><div><div class="set-lbl">Import Backup</div><div class="set-sub">Restore from JSON</div></div><button class="set-btn" onclick="importData()">Import</button></div>
+    <div class="gap"></div>`;
+}
+async function setSetting(k,v){data.settings[k]=k==='monthlyIncome'?(parseFloat(v)||0):v;await save();updateHdr();}
+
+// ═══ TRANSACTIONS ═════════════════════════════════════════════════════
+async function addTx(tx){data.transactions.push({id:uid(),...tx});await save();}
+async function delTx(id){data.transactions=data.transactions.filter(t=>t.id!==id);await save();}
+async function updTx(id,fields){const i=data.transactions.findIndex(t=>t.id===id);if(i>=0)data.transactions[i]={...data.transactions[i],...fields};await save();}
+
+// ═══ MODALS ═══════════════════════════════════════════════════════════
+function openM(html){document.getElementById('MD').innerHTML=`<div class="mdh"></div>${html}`;document.getElementById('MO').classList.remove('hidden');}
+function closeM(){document.getElementById('MO').classList.add('hidden');reconImages=[];}
+function handleOC(e){if(e.target.id==='MO')closeM();}
+
+// Category picker
+function openCatPicker(){
+  openM(`<div class="mdt">Category</div><div class="cat-grid">${CATS.filter(c=>c.id!=='adjust').map(c=>`<div class="co ${c.id===pendingCat?'sel':''}" onclick="pickCat('${c.id}')"><span style="font-size:19px">${c.icon}</span><span>${c.name}</span></div>`).join('')}</div><div class="ma"><button class="mb cancel" onclick="closeM()">Cancel</button></div>`);
+}
+function pickCat(id){pendingCat=id;const c=catById(id);const ico=document.getElementById('catIco');const nm=document.getElementById('catNm');if(ico)ico.textContent=c.icon;if(nm)nm.textContent=c.name;closeM();}
+
+// Edit transaction
+function openEditModal(id){
+  const tx=data.transactions.find(t=>t.id===id);if(!tx)return;
+  const wOpts=data.wallets.map(w=>`<option value="${w.id}" ${w.id===tx.walletId?'selected':''}>${w.icon||''} ${esc(w.name)}</option>`).join('');
+  const cOpts=CATS.map(c=>`<option value="${c.id}" ${c.id===tx.cat?'selected':''}>${c.icon} ${c.name}</option>`).join('');
+  openM(`<div class="mdt">Edit</div>
+    <div class="mf"><div class="ml">Description</div><input class="mi" id="eDesc" value="${esc(tx.desc||'')}"></div>
+    <div class="mf"><div class="ml">Amount</div><input class="mi" id="eAmt" type="number" value="${tx.amount||''}"></div>
+    ${tx.type!=='transfer'?`<div class="mf"><div class="ml">Category</div><select class="ms" id="eCat">${cOpts}</select></div>`:''}
+    ${tx.type!=='transfer'?`<div class="mf"><div class="ml">Wallet</div><select class="ms" id="eWal">${wOpts}</select></div>`:''}
+    <div class="mf"><div class="ml">Date</div><input class="mi" id="eDate" type="date" value="${tx.date}"></div>
+    <div class="ma"><button class="mb danger" onclick="doDelTx('${id}')">Delete</button><button class="mb cancel" onclick="closeM()">Cancel</button><button class="mb primary" onclick="doSaveTx('${id}')">Save</button></div>`);
+}
+async function doSaveTx(id){
+  const tx=data.transactions.find(t=>t.id===id);
+  const amount=parseFloat(document.getElementById('eAmt')?.value)||0;
+  const walletId=document.getElementById('eWal')?.value||tx.walletId;
+  const w=wById(walletId);
+  await updTx(id,{desc:document.getElementById('eDesc')?.value?.trim()||tx.desc,amount,amountPHP:toPHP(amount,w?.currency||'PHP'),cat:document.getElementById('eCat')?.value||tx.cat,walletId,date:document.getElementById('eDate')?.value||tx.date});
+  closeM();toast('Updated!');renderView();updateHdr();
+}
+async function doDelTx(id){if(!confirm('Delete?'))return;await delTx(id);closeM();renderView();updateHdr();}
+
+// Add wallet
+function openAddWModal(){
+  selColor=WCOLS[0];
+  openM(`<div class="mdt">Add Wallet</div>
+    <div class="mf"><div class="ml">Name</div><input class="mi" id="wName" placeholder="Credit Card, BDO, GCash..."></div>
+    <div class="mf"><div class="ml">Type</div><select class="ms" id="wType" onchange="updWTF()"><option value="credit">💳 Credit Card</option><option value="bank">🏦 Bank Account</option><option value="ewallet">📱 E-wallet</option><option value="usd">💵 USD Account</option><option value="investment">📈 Investment</option></select></div>
+    <div class="mf" id="wL4F" style="display:none"><div class="ml">Last 4 digits</div><input class="mi" id="wL4" maxlength="4" placeholder="1234" inputmode="numeric"></div>
+    <div class="mf"><div class="ml">Opening Balance</div><input class="mi" id="wOB" type="number" inputmode="decimal" placeholder="0"></div>
+    <div class="mf" id="wBF" style="display:none"><div class="ml">Cost Basis (total invested)</div><input class="mi" id="wB" type="number" inputmode="decimal" placeholder="0"></div>
+    <div class="mf"><div class="ml">Color</div><div class="swatches">${WCOLS.map((c,i)=>`<div class="sw ${i===0?'sel':''}" style="background:${c}" onclick="pickColor('${c}',this)"></div>`).join('')}</div></div>
+    <div class="ma"><button class="mb cancel" onclick="closeM()">Cancel</button><button class="mb primary" onclick="saveWallet()">Add</button></div>`);
+}
+function updWTF(){const t=document.getElementById('wType')?.value;document.getElementById('wL4F').style.display=t==='bank'?'block':'none';document.getElementById('wBF').style.display=t==='investment'?'block':'none';}
+function pickColor(c,el){selColor=c;document.querySelectorAll('.sw').forEach(s=>s.classList.remove('sel'));el.classList.add('sel');}
+async function saveWallet(){
+  const name=document.getElementById('wName')?.value?.trim();if(!name){toast('Enter a name.');return;}
+  const type=document.getElementById('wType')?.value||'bank';
+  const last4=document.getElementById('wL4')?.value?.trim();
+  const openBal=parseFloat(document.getElementById('wOB')?.value)||0;
+  const costBasis=parseFloat(document.getElementById('wB')?.value)||0;
+  const displayName=last4?`${name} ••••${last4}`:name;
+  const w={id:uid(),name:displayName,type,icon:WICONS[type]||'💳',color:selColor,currency:type==='usd'?'USD':'PHP',openingBalance:openBal,lastFour:last4||null};
+  data.wallets.push(w);
+  if(type==='investment'&&openBal>0)data.investmentValues.push({walletId:w.id,month:ym(),currentValue:openBal,costBasis:costBasis||openBal});
+  if(!data.settings.defaultWalletId&&type==='credit')data.settings.defaultWalletId=w.id;
+  await save();closeM();toast(`✅ ${displayName} added!`);renderView();updateHdr();selColor=WCOLS[0];
+}
+
+// Wallet detail + reconcile
+function openWModal(id){
+  const w=wById(id);if(!w)return;
+  const bal=computeBal(id);
+  const balStr=w.currency==='USD'?`${fmtUSD(bal)} ≈ ${fmtPHP(toPHP(bal,'USD'))}`:fmtPHP(bal);
+  const loggedBal=w.currency==='USD'?toPHP(bal,'USD'):bal;
+  openM(`<div style="text-align:center;margin-bottom:16px"><div style="font-size:36px">${w.icon}</div><div style="font-weight:800;font-size:17px;margin:5px 0">${esc(w.name)}</div><div style="font-size:24px;font-weight:800;color:${w.color}">${balStr}</div></div>
+    <div class="mf"><div class="ml">Adjust Opening Balance</div><input class="mi" id="adjBal" type="number" inputmode="decimal" value="${w.openingBalance||0}"></div>
+    <div class="ma">
+      <button class="mb danger" onclick="doDelWallet('${id}')">Delete</button>
+      <button class="mb cancel" onclick="openReconModal('${id}',${loggedBal})">Reconcile</button>
+      <button class="mb primary" onclick="saveAdjBal('${id}')">Save</button>
+    </div>`);
+}
+async function saveAdjBal(id){const w=wById(id);if(!w)return;w.openingBalance=parseFloat(document.getElementById('adjBal')?.value)||0;await save();closeM();toast('Balance updated!');renderView();updateHdr();}
+async function doDelWallet(id){if(!confirm('Delete wallet? Transactions stay but lose wallet link.'))return;data.wallets=data.wallets.filter(w=>w.id!==id);await save();closeM();toast('Deleted.');renderView();updateHdr();}
+
+// RECONCILE MODAL
+function openReconModal(walletId, loggedBal){
+  reconImages=[];
+  const w=wById(walletId);
+  openM(`<div class="mdt">Reconcile — ${esc(w?.name||'')}</div>
+    <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);margin-bottom:14px">
+      <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700">Logged Balance</div><div style="font-size:20px;font-weight:800;margin-top:3px">${fmtPHP(loggedBal)}</div></div>
+      <div style="text-align:right"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700">Real Balance</div><div style="font-size:20px;font-weight:800;margin-top:3px" id="realBalDisplay">—</div></div>
+    </div>
+    <div class="mf"><div class="ml">Enter Real Balance (₱)</div><input class="mi" id="realBal" type="number" inputmode="decimal" placeholder="0" oninput="updateReconDiff(${loggedBal})"></div>
+    <div style="margin:8px 0">
+      <div class="ml" style="margin-bottom:6px">Or upload screenshots (up to 20)</div>
+      <div class="upload-zone" onclick="document.getElementById('ssUpload').click()">
+        <div class="upload-zone-ico">📷</div>
+        <div class="upload-zone-txt">Tap to upload bank screenshots<br><span style="font-size:11px;opacity:.7">Images compressed before sending · Batched in one API call</span></div>
+        <input type="file" id="ssUpload" accept="image/*" multiple style="display:none" onchange="handleSSUpload(event,${loggedBal})">
+      </div>
+      <div class="upload-thumbs" id="thumbs"></div>
+      <div class="progress-bar" id="reconProgress" style="display:none"><div class="progress-fill" id="reconFill" style="width:0%"></div></div>
+      <div id="reconStatus" style="font-size:12px;color:var(--muted);margin-top:4px"></div>
+    </div>
+    <div class="recon-diff" id="reconDiff" style="display:none">
+      <div class="recon-diff-lbl">Unaccounted Difference</div>
+      <div class="recon-diff-amt" id="reconDiffAmt">—</div>
+      <div class="recon-diff-lbl" id="reconDiffSub"></div>
+    </div>
+    <div class="ma" style="margin-top:12px">
+      <button class="mb cancel" onclick="closeM()">Close</button>
+      <button class="mb success" id="writeOffBtn" onclick="doWriteOff('${walletId}',${loggedBal})" style="display:none">Write Off</button>
+    </div>`);
+}
+
+function updateReconDiff(loggedBal){
+  const real=parseFloat(document.getElementById('realBal')?.value);
+  if(isNaN(real))return;
+  const diff=real-loggedBal;
+  document.getElementById('realBalDisplay').textContent=fmtPHP(real);
+  document.getElementById('reconDiff').style.display='block';
+  document.getElementById('reconDiffAmt').textContent=(diff>=0?'+':'')+fmtPHP(diff);
+  document.getElementById('reconDiffAmt').style.color=diff===0?'var(--green)':diff>0?'var(--blue)':'var(--red)';
+  document.getElementById('reconDiffSub').textContent=diff===0?'✅ Perfectly balanced!':`${Math.abs(diff)>=1000?fmtPHP(Math.abs(diff))+' ':''} ${diff>0?'more in account than logged':'missing from logs'}`;
+  document.getElementById('writeOffBtn').style.display=diff!==0?'block':'none';
+}
+
+async function handleSSUpload(event, loggedBal){
+  const files=Array.from(event.target.files).slice(0,20);
+  if(!files.length)return;
+  if(!data.settings.proxyUrl){toast('Set up Claude proxy URL in Settings first.');return;}
+  const status=document.getElementById('reconStatus');
+  const progress=document.getElementById('reconProgress');
+  const fill=document.getElementById('reconFill');
+  const thumbs=document.getElementById('thumbs');
+  progress.style.display='block';fill.style.width='10%';
+  status.textContent=`Compressing ${files.length} image${files.length>1?'s':''}...`;
+
+  // Show thumbnails
+  reconImages=[];
+  for(const file of files){
+    const reader=new FileReader();
+    await new Promise(res=>{reader.onload=e=>{reconImages.push(e.target.result);res();};reader.readAsDataURL(file);});
+  }
+  thumbs.innerHTML=reconImages.map(src=>`<img class="thumb" src="${src}">`).join('');
+  fill.style.width='30%';status.textContent='Sending to Claude AI...';
+
+  const results=await readScreenshots(reconImages);
+  fill.style.width='100%';
+  if(!results||!results.length){status.textContent='❌ Could not read screenshots. Try entering balance manually.';return;}
+
+  // Find the most relevant balance (highest confidence match)
+  const readable=results.filter(r=>r.balance!==null);
+  if(!readable.length){status.textContent='❌ No balance found in images. Try entering manually.';return;}
+
+  // If one result, use it; if multiple, sum them or show the largest
+  const totalDetected=readable.reduce((s,r)=>s+(r.balance||0),0);
+  status.textContent=`✅ Found ${readable.length} account${readable.length>1?'s':''}: ${readable.map(r=>`${r.bank} ${fmtPHP(r.balance)}`).join(', ')}`;
+
+  // Use sum if multiple, single balance if one
+  const realBal=readable.length===1?readable[0].balance:totalDetected;
+  const inp=document.getElementById('realBal');if(inp)inp.value=realBal;
+  updateReconDiff(loggedBal);
+}
+
+async function doWriteOff(walletId, loggedBal){
+  const real=parseFloat(document.getElementById('realBal')?.value);
+  if(isNaN(real)){toast('Enter the real balance first.');return;}
+  const diff=real-loggedBal;if(diff===0)return;
+  await addTx({date:today(),type:'adjustment',desc:`Reconciliation write-off (${diff>0?'+':''}${fmtPHP(diff)})`,amount:diff,amountPHP:diff,cat:'adjust',walletId});
+  closeM();toast(`✅ ${fmtPHP(Math.abs(diff))} written off.`);renderView();updateHdr();
+}
+
+// Investment modal
+function openInvModal(id){
+  const w=wById(id);if(!w)return;
+  const inv=latestInv(id)||{currentValue:computeBal(id),costBasis:0};
+  const gain=inv.currentValue-(inv.costBasis||0);
+  const pct=inv.costBasis?((gain/inv.costBasis)*100).toFixed(1):0;
+  openM(`<div style="text-align:center;margin-bottom:16px"><div style="font-size:34px">${w.icon}</div><div style="font-weight:800;font-size:16px;margin:5px 0">${esc(w.name)}</div><div style="font-size:24px;font-weight:800">${fmtPHP(inv.currentValue)}</div><div style="font-size:13px;color:${gain>=0?'var(--green)':'var(--red)'};font-weight:700;margin-top:2px">${gain>=0?'+':''}${fmtPHP(gain)} (${gain>=0?'+':''}${pct}%) unrealized</div></div>
+    <div class="mf"><div class="ml">Current Value — ${monthLabel(ym())}</div><input class="mi" id="invVal" type="number" inputmode="decimal" value="${inv.currentValue||''}"></div>
+    <div class="mf"><div class="ml">Cost Basis (total amount invested)</div><input class="mi" id="invBasis" type="number" inputmode="decimal" value="${inv.costBasis||''}"></div>
+    <div class="ma"><button class="mb cancel" onclick="closeM()">Cancel</button><button class="mb primary" onclick="saveInv('${id}')">Save</button></div>`);
+}
+async function saveInv(id){
+  const cv=parseFloat(document.getElementById('invVal')?.value)||0;
+  const cb=parseFloat(document.getElementById('invBasis')?.value)||0;
+  const m=ym();const ex=data.investmentValues.find(v=>v.walletId===id&&v.month===m);
+  if(ex){ex.currentValue=cv;ex.costBasis=cb;}else data.investmentValues.push({walletId:id,month:m,currentValue:cv,costBasis:cb});
+  await save();closeM();toast('✅ Investment updated!');renderView();updateHdr();
+}
+
+// FX modal
+function openFXModal(){
+  const live=data.settings.usdRate;const manual=data.settings.usdRateManual;
+  openM(`<div class="mdt">USD Exchange Rate</div>
+    <div style="padding:4px 0 12px"><div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px">Live Rate</div><div style="font-size:20px;font-weight:800;margin-top:4px">$1 = ₱${live?.toFixed(2)||'—'}</div><div style="font-size:11px;color:var(--muted)">Updated ${data.settings.usdRateDate||'never'}</div></div>
+    <div class="mf"><div class="ml">Manual Override (blank = use live)</div><input class="mi" id="manRate" type="number" step=".01" inputmode="decimal" value="${manual||''}" placeholder="${live?.toFixed(2)||'56.50'}"></div>
+    <div class="ma"><button class="mb cancel" onclick="clearManRate()">Use Live</button><button class="mb primary" onclick="saveManRate()">Set Rate</button></div>`);
+}
+async function saveManRate(){const v=parseFloat(document.getElementById('manRate')?.value);data.settings.usdRateManual=v||null;await save();closeM();toast(`$1 = ₱${(v||data.settings.usdRate).toFixed(2)}`);renderView();updateHdr();}
+async function clearManRate(){data.settings.usdRateManual=null;await save();closeM();toast('Using live rate.');renderView();updateHdr();}
+
+// GOALS
+function openAddGoalModal(){
+  let selType='savings_rate';
+  openM(`<div class="mdt">Add Goal</div>
+    <div class="mf"><div class="ml">Goal Type</div>
+      <div class="goal-type-grid">
+        ${GTYPES.map(g=>`<div class="gt ${g.id==='savings_rate'?'sel':''}" id="gt_${g.id}" onclick="selGoalType('${g.id}')"><span class="gt-ico">${g.icon}</span><span>${g.label}</span></div>`).join('')}
+      </div>
+    </div>
+    <div class="mf"><div class="ml">Goal Title</div><input class="mi" id="gTitle" placeholder="e.g. Hit 30% savings rate"></div>
+    <div id="gDynFields">${buildGoalFields('savings_rate')}</div>
+    <div class="ma"><button class="mb cancel" onclick="closeM()">Cancel</button><button class="mb primary" onclick="saveGoal()">Add Goal</button></div>`);
+}
+
+function selGoalType(id){
+  document.querySelectorAll('.gt').forEach(el=>el.classList.remove('sel'));
+  document.getElementById('gt_'+id)?.classList.add('sel');
+  document.getElementById('gDynFields').innerHTML=buildGoalFields(id);
+}
+
+function buildGoalFields(type){
+  if(type==='savings_rate')return`<div class="mf"><div class="ml">Target Savings Rate (%)</div><input class="mi" id="gTarget" type="number" placeholder="30"></div><div class="mf"><div class="ml">Your Monthly Income (₱)</div><input class="mi" id="gIncome" type="number" placeholder="0" value="${data.settings.monthlyIncome||''}"></div>`;
+  if(type==='income_growth')return`<div class="mf"><div class="ml">Monthly Income Target (₱)</div><input class="mi" id="gTarget" type="number" placeholder="100000"></div><div class="mf"><div class="ml">Deadline</div><input class="mi" id="gDeadline" type="date"></div>`;
+  if(type==='fund_goal')return`<div class="mf"><div class="ml">Target Amount (₱)</div><input class="mi" id="gTarget" type="number" placeholder="500000"></div><div class="mf"><div class="ml">Already Saved (₱)</div><input class="mi" id="gSaved" type="number" placeholder="0"></div><div class="mf"><div class="ml">Deadline</div><input class="mi" id="gDeadline" type="date"></div>`;
+  if(type==='reduce_cat')return`<div class="mf"><div class="ml">Category to Reduce</div><select class="ms" id="gCat">${CATS.filter(c=>c.id!=='adjust'&&c.id!=='other').map(c=>`<option value="${c.id}">${c.icon} ${c.name}</option>`).join('')}</select></div><div class="mf"><div class="ml">Monthly Spending Limit (₱)</div><input class="mi" id="gTarget" type="number" placeholder="5000"></div>`;
+  return`<div class="mf"><div class="ml">Describe your goal (used by AI)</div><textarea class="mi" id="gNotes" rows="3" placeholder="e.g. I want to build a house worth ₱3M by 2028 and save ₱50K/month toward it."></textarea></div>`;
+}
+
+async function saveGoal(){
+  const typeEl=document.querySelector('.gt.sel');const type=typeEl?.id?.replace('gt_','')||'savings_rate';
+  const title=document.getElementById('gTitle')?.value?.trim();if(!title){toast('Enter a title.');return;}
+  const goal={id:uid(),type,title,active:true,createdAt:today(),targetValue:parseFloat(document.getElementById('gTarget')?.value)||0,deadline:document.getElementById('gDeadline')?.value||null,notes:document.getElementById('gNotes')?.value||'',categoryId:document.getElementById('gCat')?.value||null,savedAmount:parseFloat(document.getElementById('gSaved')?.value)||0,monthlyIncome:parseFloat(document.getElementById('gIncome')?.value)||0};
+  if(goal.monthlyIncome)data.settings.monthlyIncome=goal.monthlyIncome;
+  data.goals.push(goal);
+  await save();closeM();toast('✅ Goal added!');renderView();
+}
+
+function openEditGoalModal(id){
+  const g=data.goals.find(g=>g.id===id);if(!g)return;
+  const p=goalProgress(g);
+  openM(`<div class="mdt">${esc(g.title)}</div>
+    <div style="text-align:center;padding:10px 0 14px;border-bottom:1px solid var(--border);margin-bottom:14px">
+      <div style="font-size:30px;font-weight:800;color:${p.status==='on-track'?'var(--green)':p.status==='at-risk'?'var(--yellow)':'var(--red)'}">${p.pct}%</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:3px">${esc(p.label)}</div>
+    </div>
+    ${g.type==='fund_goal'?`<div class="mf"><div class="ml">Amount Saved So Far (₱)</div><input class="mi" id="gSavedEdit" type="number" value="${g.savedAmount||0}"></div>`:''}
+    ${g.type==='savings_rate'?`<div class="mf"><div class="ml">Your Monthly Income (₱)</div><input class="mi" id="gIncomeEdit" type="number" value="${g.monthlyIncome||data.settings.monthlyIncome||0}"></div>`:''}
+    <div class="mf"><div class="ml">Target</div><input class="mi" id="gTargetEdit" type="number" value="${g.targetValue||0}"></div>
+    <div class="mf"><div class="ml">Notes (for AI context)</div><textarea class="mi" id="gNotesEdit" rows="2">${esc(g.notes||'')}</textarea></div>
+    <div class="ma">
+      <button class="mb danger" onclick="archiveGoal('${id}')">Archive</button>
+      <button class="mb cancel" onclick="closeM()">Cancel</button>
+      <button class="mb primary" onclick="updateGoal('${id}')">Save</button>
+    </div>`);
+}
+
+async function updateGoal(id){
+  const g=data.goals.find(g=>g.id===id);if(!g)return;
+  g.targetValue=parseFloat(document.getElementById('gTargetEdit')?.value)||g.targetValue;
+  g.notes=document.getElementById('gNotesEdit')?.value||'';
+  const saved=parseFloat(document.getElementById('gSavedEdit')?.value);if(!isNaN(saved))g.savedAmount=saved;
+  const inc=parseFloat(document.getElementById('gIncomeEdit')?.value);if(!isNaN(inc)){g.monthlyIncome=inc;data.settings.monthlyIncome=inc;}
+  await save();closeM();toast('Goal updated!');renderView();updateHdr();
+}
+
+async function archiveGoal(id){
+  const g=data.goals.find(g=>g.id===id);if(!g)return;
+  g.active=false;await save();closeM();toast('Goal archived.');renderView();
+}
+
+// ═══ UTILS ════════════════════════════════════════════════════════════
+function destroyCharts(){Object.values(charts).forEach(c=>{try{c.destroy();}catch(e){}});charts={};}
+let _tt;
+function toast(msg){const t=document.getElementById('T');t.textContent=msg;t.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>t.classList.remove('show'),2800);}
+
+// ═══ INIT ════════════════════════════════════════════════════════════
+async function init(){
+  loadLocal();
+  await tryRestoreFolder();
+  if(!data.settings.usdRateDate||data.settings.usdRateDate<today())fetchRate();
+  // Auto-refresh insights once per day
+  if(data.settings.proxyUrl&&data.insights?.lastUpdated){
+    const lastDay=new Date(data.insights.lastUpdated).toISOString().slice(0,10);
+    if(lastDay<today())setTimeout(generateInsights,3000);
+  }
+  updateHdr();
+  renderView();
+}
+init();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
