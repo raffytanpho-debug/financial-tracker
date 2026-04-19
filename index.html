@@ -1051,6 +1051,7 @@ function toast(msg){const t=document.getElementById('T');t.textContent=msg;t.cla
 async function init(){
   loadLocal();
   await tryRestoreFolder();
+  await save();
   if(!data.settings.usdRateDate||data.settings.usdRateDate<today())fetchRate();
   // Auto-refresh insights once per day
   if(data.settings.proxyUrl&&data.insights?.lastUpdated){
