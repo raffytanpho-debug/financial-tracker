@@ -825,13 +825,15 @@ function openAddWModal(){
     <div class="mf"><div class="ml">Opening Balance</div><input class="mi" id="wOB" type="number" inputmode="decimal" placeholder="0"></div>
     <div class="mf" id="wBF" style="display:none"><div class="ml">Cost Basis (total invested)</div><input class="mi" id="wB" type="number" inputmode="decimal" placeholder="0"></div>
     <div class="mf"><div class="ml">Color</div><div class="swatches">${WCOLS.map((c,i)=>`<div class="sw ${i===0?'sel':''}" style="background:${c}" onclick="pickColor('${c}',this)"></div>`).join('')}</div></div>
-    <div class="ma"><button class="mb cancel" onclick="closeM()">Cancel</button><button class="mb primary" onclick="saveWallet()">Add</button></div>`);
+    <div class="ma"><button class="mb cancel" onclick="closeM()">Cancel</button><button type="button" class="mb primary" onclick="saveWallet()">Add</button></div>`);
 }
 function updWTF(){const t=document.getElementById('wType')?.value;document.getElementById('wL4F').style.display=t==='bank'?'block':'none';document.getElementById('wBF').style.display=t==='investment'?'block':'none';}
 function pickColor(c,el){selColor=c;document.querySelectorAll('.sw').forEach(s=>s.classList.remove('sel'));el.classList.add('sel');}
+let _savingWallet=false;
 async function saveWallet(){
+  if(_savingWallet)return;_savingWallet=true;
   console.log('[SAVE_WALLET] called, wallets before:',data.wallets.length);
-  const name=document.getElementById('wName')?.value?.trim();if(!name){toast('Enter a name.');return;}
+  const name=document.getElementById('wName')?.value?.trim();if(!name){_savingWallet=false;toast('Enter a name.');return;}
   const type=document.getElementById('wType')?.value||'bank';
   const last4=document.getElementById('wL4')?.value?.trim();
   const openBal=parseFloat(document.getElementById('wOB')?.value)||0;
@@ -843,6 +845,7 @@ async function saveWallet(){
   if(type==='investment'&&openBal>0)data.investmentValues.push({walletId:w.id,month:ym(),currentValue:openBal,costBasis:costBasis||openBal});
   if(!data.settings.defaultWalletId&&type==='credit')data.settings.defaultWalletId=w.id;
   await save();closeM();toast(`✅ ${displayName} added!`);renderView();updateHdr();selColor=WCOLS[0];
+  _savingWallet=false;
 }
 
 // Wallet detail + reconcile
