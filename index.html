@@ -11,6 +11,7 @@
   <meta name="apple-mobile-web-app-title" content="₱ Tracker">
   <link rel="apple-touch-icon" href="icon.svg">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     :root {
       --bg:#0f0e17; --surface:#1c1b2e; --surface2:#252438; --border:#312f4f;
@@ -265,7 +266,7 @@ const GTYPES=[
 const DEF={version:4,settings:{usdRate:56.5,usdRateDate:null,usdRateManual:null,defaultWalletId:null,proxyUrl:'',apiKey:'',autoRefresh:true},wallets:[],transactions:[],investmentValues:[],goals:[],insights:{text:null,lastUpdated:null}};
 
 // ═══ STATE ═══════════════════════════════════════════════════════════
-let data=clone(DEF),view='log',logType='expense',statsMonth=ym(),pendingCat='other',selColor=WCOLS[0],folderHandle=null,charts={},reconImages=[],genInProgress=false;
+let data=clone(DEF),view='log',logType='expense',statsMonth=ym(),pendingCat='other',selColor=WCOLS[0],gdriveToken=null,gdriveFileId=null,charts={},reconImages=[],genInProgress=false;
 
 // ═══ HELPERS ═════════════════════════════════════════════════════════
 function clone(o){return JSON.parse(JSON.stringify(o))}
@@ -342,10 +343,16 @@ function loadLocal(){try{const r=localStorage.getItem('pt4');if(r)data={...clone
 async function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open('ptDB',3);r.onupgradeneeded=e=>{try{e.target.result.createObjectStore('kv');}catch(x){}};r.onsuccess=e=>res(e.target.result);r.onerror=rej;})}
 async function dbGet(k){const db=await openDB();return new Promise((res,rej)=>{const r=db.transaction('kv','readonly').objectStore('kv').get(k);r.onsuccess=e=>res(e.target.result);r.onerror=rej;})}
 async function dbSet(k,v){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction('kv','readwrite');tx.objectStore('kv').put(v,k);tx.oncomplete=res;tx.onerror=rej;})}
-async function save(){if(!folderHandle){saveLocal();return;}try{const fh=await folderHandle.getFileHandle('tracker-data.json',{create:true});const w=await fh.createWritable();await w.write(JSON.stringify(data,null,2));await w.close();saveLocal();}catch(e){saveLocal();}}
-async function loadFromFolder(){if(!folderHandle){loadLocal();return;}try{const fh=await folderHandle.getFileHandle('tracker-data.json');data={...clone(DEF),...JSON.parse(await(await fh.getFile()).text())};saveLocal();}catch(e){loadLocal();}}
-async function connectFolder(){if(!('showDirectoryPicker'in window)){toast('Use Chrome or Edge for folder sync.');return;}try{folderHandle=await window.showDirectoryPicker({mode:'readwrite',startIn:'documents'});await dbSet('fh',folderHandle);await loadFromFolder();await save();toast('✅ Connected to Google Drive folder!');renderView();updateHdr();}catch(e){if(e.name!=='AbortError')toast('Could not connect.');}}
-async function tryRestoreFolder(){try{const h=await dbGet('fh');if(!h)return;const p=await h.queryPermission({mode:'readwrite'});if(p==='granted'){folderHandle=h;await loadFromFolder();}else{const r=await h.requestPermission({mode:'readwrite'});if(r==='granted'){folderHandle=h;await loadFromFolder();}}}catch(e){}}
+const GDRIVE_CLIENT_ID='428293773028-hdmpetjd007bahi6kmm4ku61j8gss3mf.apps.googleusercontent.com';
+const GDRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
+let gdriveRefreshTimer=null;
+function scheduleTokenRefresh(expiresInMs){if(gdriveRefreshTimer)clearTimeout(gdriveRefreshTimer);const refreshIn=Math.max(expiresInMs-5*60*1000,30000);gdriveRefreshTimer=setTimeout(silentTokenRefresh,refreshIn);}
+function silentTokenRefresh(){if(!window.google?.accounts?.oauth2||!gdriveFileId)return;const client=google.accounts.oauth2.initTokenClient({client_id:GDRIVE_CLIENT_ID,scope:GDRIVE_SCOPE,callback:async r=>{if(r.error||!r.access_token)return;gdriveToken=r.access_token;await dbSet('gdriveToken',r.access_token);const expiry=Date.now()+((r.expires_in||3599)*1000);await dbSet('gdriveExpiry',expiry);scheduleTokenRefresh((r.expires_in||3599)*1000);}});client.requestAccessToken({prompt:''});}
+async function save(){saveLocal();if(!gdriveToken||!gdriveFileId)return;try{await fetch(`https://www.googleapis.com/upload/drive/v3/files/${gdriveFileId}?uploadType=media`,{method:'PATCH',headers:{'Authorization':'Bearer '+gdriveToken,'Content-Type':'application/json'},body:JSON.stringify(data,null,2)});}catch(e){console.error('Drive save failed',e);}}
+async function loadFromFolder(){if(!gdriveToken||!gdriveFileId){loadLocal();return;}try{const r=await fetch(`https://www.googleapis.com/drive/v3/files/${gdriveFileId}?alt=media`,{headers:{'Authorization':'Bearer '+gdriveToken}});if(!r.ok)throw 0;const j=await r.json();if(!j.wallets)throw 0;data={...clone(DEF),...j};saveLocal();}catch(e){loadLocal();}}
+async function findOrCreateDriveFile(){const q=encodeURIComponent("name='tracker-data.json' and trashed=false");const r=await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive&fields=files(id)`,{headers:{'Authorization':'Bearer '+gdriveToken}});const j=await r.json();if(j.files&&j.files.length>0){gdriveFileId=j.files[0].id;await dbSet('gdriveFileId',gdriveFileId);return;}const meta={name:'tracker-data.json',mimeType:'application/json'};const form=new FormData();form.append('metadata',new Blob([JSON.stringify(meta)],{type:'application/json'}));form.append('file',new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const cr=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{method:'POST',headers:{'Authorization':'Bearer '+gdriveToken},body:form});const cj=await cr.json();gdriveFileId=cj.id;await dbSet('gdriveFileId',gdriveFileId);}
+async function connectFolder(){if(!window.google?.accounts?.oauth2){toast('Google sign-in not loaded. Try refreshing.');return;}const client=google.accounts.oauth2.initTokenClient({client_id:GDRIVE_CLIENT_ID,scope:GDRIVE_SCOPE,callback:async r=>{if(r.error){toast('Could not connect to Google Drive.');return;}gdriveToken=r.access_token;await dbSet('gdriveToken',r.access_token);const expiry=Date.now()+((r.expires_in||3599)*1000);await dbSet('gdriveExpiry',expiry);scheduleTokenRefresh((r.expires_in||3599)*1000);await findOrCreateDriveFile();await loadFromFolder();await save();toast('✅ Connected to Google Drive!');renderView();updateHdr();}});client.requestAccessToken({prompt:''});}
+async function tryRestoreFolder(){try{const token=await dbGet('gdriveToken');const expiry=await dbGet('gdriveExpiry');const fileId=await dbGet('gdriveFileId');if(!token||!fileId||!expiry)return;if(Date.now()>expiry){await dbSet('gdriveToken',null);return;}gdriveToken=token;gdriveFileId=fileId;scheduleTokenRefresh(expiry-Date.now());await loadFromFolder();}catch(e){}}
 function exportData(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.download=`tracker-${today()}.json`;a.click();toast('Exported!');}
 function importData(){const inp=document.createElement('input');inp.type='file';inp.accept='.json';inp.onchange=async e=>{const file=e.target.files[0];if(!file)return;try{const imp=JSON.parse(await file.text());if(!imp.wallets)throw 0;data={...clone(DEF),...imp};await save();toast('✅ Imported!');renderView();updateHdr();}catch(e){toast('Invalid file.');}};inp.click();}
 
@@ -746,7 +753,7 @@ function initNWChart(){
 
 // ── SETTINGS VIEW ─────────────────────────
 function buildSettings(){
-  const ok=!!folderHandle;
+  const ok=!!gdriveToken;
   return`
     <div class="set-sec">Claude AI</div>
     <div class="set-row"><div><div class="set-lbl">Proxy URL</div><div class="set-sub">Cloudflare Worker URL for Claude API</div></div><input class="set-inp" type="url" placeholder="https://..." value="${esc(data.settings.proxyUrl||'')}" onchange="setSetting('proxyUrl',this.value)" style="width:160px;font-size:11px"/></div>
