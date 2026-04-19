@@ -1,4 +1,4 @@
-const CACHE = '₱tracker-v2';
+const CACHE = '₱tracker-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -22,10 +22,19 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // Network-first for API calls, cache-first for everything else
-  if (e.request.url.includes('open.er-api.com') || e.request.url.includes('workers.dev')) {
+  const url = e.request.url;
+  // Network-first for API calls and HTML (so updates always come through)
+  if (url.includes('open.er-api.com') || url.includes('workers.dev') ||
+      url.includes('accounts.google.com') || url.includes('googleapis.com') ||
+      e.request.destination === 'document') {
     e.respondWith(
-      fetch(e.request).catch(() => caches.match(e.request))
+      fetch(e.request).then(res => {
+        if (res.ok && e.request.destination === 'document') {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+        }
+        return res;
+      }).catch(() => caches.match(e.request))
     );
     return;
   }
