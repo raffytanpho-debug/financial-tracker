@@ -357,7 +357,7 @@ async function findOrCreateDriveFile(){
   if(storedId){const check=await fetch(`https://www.googleapis.com/drive/v3/files/${storedId}?fields=id,trashed`,{headers:{'Authorization':'Bearer '+gdriveToken}});if(check.ok){const cf=await check.json();if(!cf.trashed){gdriveFileId=storedId;return;}}}
   // Clear stale ID and search for a valid root-level file
   await dbSet('gdriveFileId',null);
-  const q=encodeURIComponent("name='tracker-data.json' and 'root' in parents and trashed=false");const r=await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive&fields=files(id)&orderBy=createdTime`,{headers:{'Authorization':'Bearer '+gdriveToken}});const j=await r.json();if(j.files&&j.files.length>0){gdriveFileId=j.files[0].id;await dbSet('gdriveFileId',gdriveFileId);return;}
+  const q=encodeURIComponent("name='tracker-data.json' and 'root' in parents and trashed=false");const r=await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive&fields=files(id)&orderBy=modifiedTime+desc`,{headers:{'Authorization':'Bearer '+gdriveToken}});const j=await r.json();if(j.files&&j.files.length>0){gdriveFileId=j.files[0].id;await dbSet('gdriveFileId',gdriveFileId);return;}
   // No file found — create a fresh one in root
   const meta={name:'tracker-data.json',mimeType:'application/json'};const form=new FormData();form.append('metadata',new Blob([JSON.stringify(meta)],{type:'application/json'}));form.append('file',new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const cr=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{method:'POST',headers:{'Authorization':'Bearer '+gdriveToken},body:form});const cj=await cr.json();gdriveFileId=cj.id;await dbSet('gdriveFileId',gdriveFileId);}
 async function connectFolder(){if(!window.google?.accounts?.oauth2){toast('Google sign-in not loaded. Try refreshing.');return;}const client=google.accounts.oauth2.initTokenClient({client_id:GDRIVE_CLIENT_ID,scope:GDRIVE_SCOPE,callback:async r=>{if(r.error){toast('Could not connect to Google Drive.');return;}gdriveToken=r.access_token;await dbSet('gdriveToken',r.access_token);const expiry=Date.now()+((r.expires_in||3599)*1000);await dbSet('gdriveExpiry',expiry);scheduleTokenRefresh((r.expires_in||3599)*1000);await findOrCreateDriveFile();const loaded=await loadFromFolder();if(loaded)toast('✅ Connected! Data loaded from Drive.');else{await save();toast('✅ Connected to Google Drive!');}renderView();updateHdr();}});client.requestAccessToken({prompt:''});}
@@ -468,7 +468,9 @@ function updateHdr(){
   const nw=netWorth(),m=view==='stats'?statsMonth:ym();
   const spent=mSpend(m),inc=mIncome(m)||0;
   const saved=inc-spent,pct=inc>0?Math.round((saved/inc)*100):null;
+  const driveBanner=(!gdriveToken||!gdriveFileId)?`<div style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);border-radius:8px;padding:7px 10px;margin-bottom:10px;font-size:12px;color:#fca5a5;display:flex;align-items:center;justify-content:space-between;gap:8px"><span>⚠️ Not syncing to Drive — changes are local only</span><button onclick="connectFolder()" style="background:rgba(239,68,68,.3);border:none;border-radius:6px;color:#fca5a5;font-size:11px;font-weight:700;padding:3px 8px;cursor:pointer">Reconnect</button></div>`:'';
   document.getElementById('header').innerHTML=`
+    ${driveBanner}
     <div class="hdr-lbl">Net Worth</div>
     <div class="hdr-bal">${fmtPHP(nw)}</div>
     <div class="hdr-pills">
@@ -570,8 +572,10 @@ function initLogEv(){
   if(fromInp&&toInp&&data.wallets.length>=2){toInp.selectedIndex=1;}
 }
 
+let _savingTx=false;
 async function submitLog(){
-  if(data.wallets.length===0){toast('Add a wallet first!');return;}
+  if(_savingTx)return;_savingTx=true;
+  if(data.wallets.length===0){_savingTx=false;toast('Add a wallet first!');return;}
   const inp=document.getElementById('logInp');
   if(logType==='expense'){
     const raw=inp.value.trim();
@@ -579,13 +583,13 @@ async function submitLog(){
     const amount=Number(document.getElementById('amtInp')?.value)||pa||0;
     const walletId=document.getElementById('walInp')?.value;
     const w=wById(walletId);const cur=w?.currency||'PHP';
-    if(!raw&&!amount){toast('Enter a description or amount.');return;}
+    if(!raw&&!amount){_savingTx=false;toast('Enter a description or amount.');return;}
     await addTx({date:today(),type:'expense',desc:desc||raw,amount,amountPHP:toPHP(amount,cur),cat:pendingCat||catId,walletId});
     inp.value='';const ai=document.getElementById('amtInp');if(ai)ai.value='';
     toast(`${catById(pendingCat||catId).icon} ${desc||raw}${amount?' — '+fmtPHP(toPHP(amount,cur)):''}`);
   }else if(logType==='income'){
     const amount=Number(document.getElementById('incAmtInp')?.value);
-    if(!amount){toast('Enter an amount.');return;}
+    if(!amount){_savingTx=false;toast('Enter an amount.');return;}
     const walletId=document.getElementById('incWalInp')?.value;
     const incomeType=document.getElementById('incTypeInp')?.value||'other';
     const desc=inp.value.trim()||ITYPES.find(t=>t.id===incomeType)?.label||'Income';
@@ -595,17 +599,17 @@ async function submitLog(){
     toast(`💰 +${fmtPHP(amountPHP)} logged`);
   }else{
     const amount=Number(document.getElementById('trAmtInp')?.value);
-    if(!amount){toast('Enter an amount.');return;}
+    if(!amount){_savingTx=false;toast('Enter an amount.');return;}
     const fromWalletId=document.getElementById('fromInp')?.value;
     const toWalletId=document.getElementById('toInp')?.value;
-    if(fromWalletId===toWalletId){toast('Pick two different wallets.');return;}
+    if(fromWalletId===toWalletId){_savingTx=false;toast('Pick two different wallets.');return;}
     const desc=inp.value.trim()||'Transfer';
     await addTx({date:today(),type:'transfer',desc,amount,amountPHP:amount,cat:'other',fromWalletId,toWalletId});
     inp.value='';document.getElementById('trAmtInp').value='';
     const fw=wById(fromWalletId),tw=wById(toWalletId);
     toast(`↔ ${fw?.name} → ${tw?.name} — ${fmtPHP(amount)}`);
   }
-  renderView();updateHdr();
+  _savingTx=false;renderView();updateHdr();
 }
 
 // ── STATS VIEW ────────────────────────────
@@ -1058,26 +1062,4 @@ function destroyCharts(){Object.values(charts).forEach(c=>{try{c.destroy();}catc
 let _tt;
 function toast(msg){const t=document.getElementById('T');t.textContent=msg;t.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>t.classList.remove('show'),2800);}
 
-// ═══ INIT ════════════════════════════════════════════════════════════
-async function init(){
-  loadLocal();
-  await tryRestoreFolder();
-  if(!data.settings.usdRateDate||data.settings.usdRateDate<today())fetchRate();
-  // Auto-refresh insights once per day
-  if(data.settings.proxyUrl&&data.insights?.lastUpdated){
-    const lastDay=new Date(data.insights.lastUpdated).toISOString().slice(0,10);
-    if(lastDay<today())setTimeout(generateInsights,3000);
-  }
-  updateHdr();
-  renderView();
-}
-init();
-
-if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('./sw.js').catch(()=>{});
-  });
-}
-</script>
-</body>
-</html>
+// ═══ INIT ═════════════�
