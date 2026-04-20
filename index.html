@@ -1085,33 +1085,3 @@ if('serviceWorker' in navigator){
 </script>
 </body>
 </html>
-async function init(){
-  loadLocal();
-  await tryRestoreFolder();
-  if(\!data.settings.usdRateDate||data.settings.usdRateDate<today())fetchRate();
-  // Auto-refresh insights once per day
-  if(data.settings.proxyUrl&&data.insights?.lastUpdated){
-    const lastDay=new Date(data.insights.lastUpdated).toISOString().slice(0,10);
-    if(lastDay<today())setTimeout(generateInsights,3000);
-  }
-  updateHdr();
-  renderView();
-}
-init();
-
-if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('./sw.js').catch(()=>{});
-  });
-}
-</script>
-</body>
-</html>
-{
-  window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('./sw.js').catch(()=>{});
-  });
-}
-</script>
-</body>
-</html>
