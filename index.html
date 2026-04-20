@@ -349,8 +349,8 @@ const GDRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
 let gdriveRefreshTimer=null;
 function scheduleTokenRefresh(expiresInMs){if(gdriveRefreshTimer)clearTimeout(gdriveRefreshTimer);const refreshIn=Math.max(expiresInMs-5*60*1000,30000);gdriveRefreshTimer=setTimeout(silentTokenRefresh,refreshIn);}
 function silentTokenRefresh(){if(!window.google?.accounts?.oauth2||!gdriveFileId)return;const client=google.accounts.oauth2.initTokenClient({client_id:GDRIVE_CLIENT_ID,scope:GDRIVE_SCOPE,callback:async r=>{if(r.error||!r.access_token)return;gdriveToken=r.access_token;await dbSet('gdriveToken',r.access_token);const expiry=Date.now()+((r.expires_in||3599)*1000);await dbSet('gdriveExpiry',expiry);scheduleTokenRefresh((r.expires_in||3599)*1000);}});client.requestAccessToken({prompt:''});}
-async function save(){saveLocal();if(!gdriveToken||!gdriveFileId)return;try{console.log('[SAVE] wallets:',data.wallets.length,data.wallets.map(w=>w.name));await fetch(`https://www.googleapis.com/upload/drive/v3/files/${gdriveFileId}?uploadType=media`,{method:'PATCH',headers:{'Authorization':'Bearer '+gdriveToken,'Content-Type':'application/json'},body:JSON.stringify(data,null,2)});console.log('[SAVE] done');}catch(e){console.error('Drive save failed',e);}}
-async function loadFromFolder(){console.log('[LOAD] called, fileId:',gdriveFileId);if(!gdriveToken||!gdriveFileId){loadLocal();return false;}try{const r=await fetch(`https://www.googleapis.com/drive/v3/files/${gdriveFileId}?alt=media`,{headers:{'Authorization':'Bearer '+gdriveToken}});if(!r.ok)throw 0;const j=await r.json();if(!j.wallets)throw 0;console.log('[LOAD] from Drive wallets:',j.wallets.length,j.wallets.map(w=>w.name));data={...clone(DEF),...j};dedupeData();console.log('[LOAD] after dedupe wallets:',data.wallets.length);saveLocal();return true;}catch(e){console.log('[LOAD] failed, using local');loadLocal();return false;}}
+async function save(){saveLocal();if(!gdriveToken||!gdriveFileId)return;try{await fetch(`https://www.googleapis.com/upload/drive/v3/files/${gdriveFileId}?uploadType=media`,{method:'PATCH',headers:{'Authorization':'Bearer '+gdriveToken,'Content-Type':'application/json'},body:JSON.stringify(data,null,2)});}catch(e){console.error('Drive save failed',e);}}
+async function loadFromFolder(){if(!gdriveToken||!gdriveFileId){loadLocal();return false;}try{const r=await fetch(`https://www.googleapis.com/drive/v3/files/${gdriveFileId}?alt=media`,{headers:{'Authorization':'Bearer '+gdriveToken}});if(!r.ok)throw 0;const j=await r.json();if(!j.wallets)throw 0;data={...clone(DEF),...j};dedupeData();saveLocal();return true;}catch(e){loadLocal();return false;}}
 async function findOrCreateDriveFile(){
   // Check stored file ID — verify it exists and is not trashed
   const storedId=await dbGet('gdriveFileId');
@@ -832,7 +832,6 @@ function pickColor(c,el){selColor=c;document.querySelectorAll('.sw').forEach(s=>
 let _savingWallet=false;
 async function saveWallet(){
   if(_savingWallet)return;_savingWallet=true;
-  console.log('[SAVE_WALLET] called, wallets before:',data.wallets.length);
   const name=document.getElementById('wName')?.value?.trim();if(!name){_savingWallet=false;toast('Enter a name.');return;}
   const type=document.getElementById('wType')?.value||'bank';
   const last4=document.getElementById('wL4')?.value?.trim();
@@ -841,7 +840,6 @@ async function saveWallet(){
   const displayName=last4?`${name} ••••${last4}`:name;
   const w={id:uid(),name:displayName,type,icon:WICONS[type]||'💳',color:selColor,currency:type==='usd'?'USD':'PHP',openingBalance:openBal,lastFour:last4||null};
   data.wallets.push(w);
-  console.log('[SAVE_WALLET] after push, wallets:',data.wallets.length,data.wallets.map(w=>w.name));
   if(type==='investment'&&openBal>0)data.investmentValues.push({walletId:w.id,month:ym(),currentValue:openBal,costBasis:costBasis||openBal});
   if(!data.settings.defaultWalletId&&type==='credit')data.settings.defaultWalletId=w.id;
   await save();closeM();toast(`✅ ${displayName} added!`);renderView();updateHdr();selColor=WCOLS[0];
