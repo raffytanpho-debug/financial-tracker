@@ -489,13 +489,13 @@ function toggleBal(){balHidden=!balHidden;localStorage.setItem('balHidden',balHi
 // ── LOG VIEW ──────────────────────────────
 function buildLog(){
   const dw=defW();
-  const wOpts=data.wallets.map(w=>`<option value="${w.id}">${WICONS[w.type]||'💳'} ${esc(w.name)}</option>`).join('');
-  const noW=data.wallets.length===0;
-  const txs=data.transactions.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,60);
-  const grouped={};txs.forEach(tx=>{(grouped[tx.date]=grouped[tx.date]||[]).push(tx);});
   const selWid=dw?.id||'';
   const selW=wById(selWid);
   const isUSD=selW?.currency==='USD';
+  const wOpts=data.wallets.map(w=>`<option value="${w.id}" ${w.id===selWid?'selected':''}>${WICONS[w.type]||'💳'} ${esc(w.name)}</option>`).join('');
+  const noW=data.wallets.length===0;
+  const txs=data.transactions.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,60);
+  const grouped={};txs.forEach(tx=>{(grouped[tx.date]=grouped[tx.date]||[]).push(tx);});
 
   return`
     <div class="log-top">
@@ -506,7 +506,7 @@ function buildLog(){
       </div>
       <div class="log-row">
         <input class="log-inp" id="logInp" type="text" autocomplete="off" autocorrect="off"
-          placeholder="${logType==='expense'?'massage 800 · coffee · grab 120':logType==='income'?'Description (optional)':'Note (optional)'}"/>
+          placeholder="${logType==='expense'?'dinner 400 · coffee 200 · others 100':logType==='income'?'Description (optional)':'Note (optional)'}"/>
         <button class="log-btn" onclick="submitLog()">+</button>
       </div>
       ${noW?'':logType==='expense'?`
@@ -831,14 +831,15 @@ function openAddWModal(){
   selColor=WCOLS[0];
   openM(`<div class="mdt">Add Wallet</div>
     <div class="mf"><div class="ml">Name</div><input class="mi" id="wName" placeholder="Credit Card, BDO, GCash..."></div>
-    <div class="mf"><div class="ml">Type</div><select class="ms" id="wType" onchange="updWTF()"><option value="credit">💳 Credit Card</option><option value="bank">🏦 Bank Account</option><option value="ewallet">📱 E-wallet</option><option value="usd">💵 USD Account</option><option value="investment">📈 Investment</option></select></div>
+    <div class="mf"><div class="ml">Type</div><select class="ms" id="wType" onchange="updWTF()"><option value="credit">💳 Credit Card</option><option value="bank">🏦 Bank Account</option><option value="ewallet">📱 E-wallet</option><option value="investment">📈 Investment</option></select></div>
+    <div class="mf" id="wCurF"><div class="ml">Currency</div><select class="ms" id="wCur"><option value="PHP">🇵🇭 PHP — Philippine Peso</option><option value="USD">🇺🇸 USD — US Dollar</option></select></div>
     <div class="mf" id="wL4F" style="display:none"><div class="ml">Last 4 digits</div><input class="mi" id="wL4" maxlength="4" placeholder="1234" inputmode="numeric"></div>
     <div class="mf"><div class="ml">Opening Balance</div><input class="mi" id="wOB" type="number" inputmode="decimal" placeholder="0"></div>
     <div class="mf" id="wBF" style="display:none"><div class="ml">Cost Basis (total invested)</div><input class="mi" id="wB" type="number" inputmode="decimal" placeholder="0"></div>
     <div class="mf"><div class="ml">Color</div><div class="swatches">${WCOLS.map((c,i)=>`<div class="sw ${i===0?'sel':''}" style="background:${c}" onclick="pickColor('${c}',this)"></div>`).join('')}</div></div>
     <div class="ma"><button class="mb cancel" onclick="closeM()">Cancel</button><button type="button" class="mb primary" onclick="saveWallet()">Add</button></div>`);
 }
-function updWTF(){const t=document.getElementById('wType')?.value;document.getElementById('wL4F').style.display=t==='bank'?'block':'none';document.getElementById('wBF').style.display=t==='investment'?'block':'none';}
+function updWTF(){const t=document.getElementById('wType')?.value;document.getElementById('wL4F').style.display=t==='bank'?'block':'none';document.getElementById('wBF').style.display=t==='investment'?'block':'none';document.getElementById('wCurF').style.display=t==='investment'?'none':'block';}
 function pickColor(c,el){selColor=c;document.querySelectorAll('.sw').forEach(s=>s.classList.remove('sel'));el.classList.add('sel');}
 let _savingWallet=false;
 let _savingGoal=false;
@@ -850,7 +851,9 @@ async function saveWallet(){
   const openBal=parseFloat(document.getElementById('wOB')?.value)||0;
   const costBasis=parseFloat(document.getElementById('wB')?.value)||0;
   const displayName=last4?`${name} ••••${last4}`:name;
-  const w={id:uid(),name:displayName,type,icon:WICONS[type]||'💳',color:selColor,currency:type==='usd'?'USD':'PHP',openingBalance:openBal,lastFour:last4||null};
+  const currency=type==='investment'?'PHP':(document.getElementById('wCur')?.value||'PHP');
+  const icon=currency==='USD'?'💵':(WICONS[type]||'💳');
+  const w={id:uid(),name:displayName,type,icon,color:selColor,currency,openingBalance:openBal,lastFour:last4||null};
   data.wallets.push(w);
   if(type==='investment'&&openBal>0)data.investmentValues.push({walletId:w.id,month:ym(),currentValue:openBal,costBasis:costBasis||openBal});
   if(!data.settings.defaultWalletId&&type==='credit')data.settings.defaultWalletId=w.id;
