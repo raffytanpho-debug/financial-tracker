@@ -267,6 +267,7 @@ const DEF={version:4,settings:{usdRate:56.5,usdRateDate:null,usdRateManual:null,
 
 // ═══ STATE ═══════════════════════════════════════════════════════════
 let data=clone(DEF),view='log',logType='expense',statsMonth=ym(),pendingCat='other',selColor=WCOLS[0],gdriveToken=null,gdriveFileId=null,charts={},reconImages=[],genInProgress=false;
+let balHidden=localStorage.getItem('balHidden')==='1';
 
 // ═══ HELPERS ═════════════════════════════════════════════════════════
 function clone(o){return JSON.parse(JSON.stringify(o))}
@@ -350,7 +351,7 @@ let gdriveRefreshTimer=null;
 function scheduleTokenRefresh(expiresInMs){if(gdriveRefreshTimer)clearTimeout(gdriveRefreshTimer);const refreshIn=Math.max(expiresInMs-5*60*1000,30000);gdriveRefreshTimer=setTimeout(silentTokenRefresh,refreshIn);}
 function silentTokenRefresh(){if(!window.google?.accounts?.oauth2||!gdriveFileId)return;const client=google.accounts.oauth2.initTokenClient({client_id:GDRIVE_CLIENT_ID,scope:GDRIVE_SCOPE,callback:async r=>{if(r.error||!r.access_token)return;gdriveToken=r.access_token;await dbSet('gdriveToken',r.access_token);const expiry=Date.now()+((r.expires_in||3599)*1000);await dbSet('gdriveExpiry',expiry);scheduleTokenRefresh((r.expires_in||3599)*1000);}});client.requestAccessToken({prompt:''});}
 async function save(){saveLocal();if(!gdriveToken||!gdriveFileId)return;try{await fetch(`https://www.googleapis.com/upload/drive/v3/files/${gdriveFileId}?uploadType=media`,{method:'PATCH',headers:{'Authorization':'Bearer '+gdriveToken,'Content-Type':'application/json'},body:JSON.stringify(data,null,2)});}catch(e){console.error('Drive save failed',e);}}
-async function loadFromFolder(){if(!gdriveToken||!gdriveFileId){loadLocal();return false;}try{const r=await fetch(`https://www.googleapis.com/drive/v3/files/${gdriveFileId}?alt=media`,{headers:{'Authorization':'Bearer '+gdriveToken}});if(!r.ok)throw 0;const j=await r.json();if(!j.wallets)throw 0;data={...clone(DEF),...j};dedupeData();saveLocal();return true;}catch(e){loadLocal();return false;}}
+async function loadFromFolder(){if(!gdriveToken||!gdriveFileId){loadLocal();return false;}try{const local=clone(data);const r=await fetch(`https://www.googleapis.com/drive/v3/files/${gdriveFileId}?alt=media`,{headers:{'Authorization':'Bearer '+gdriveToken}});if(!r.ok)throw 0;const j=await r.json();if(!j.wallets)throw 0;data={...clone(DEF),...j};let hadOfflineData=false;['wallets','transactions','investmentValues','goals'].forEach(k=>{if(!Array.isArray(data[k]))data[k]=[];const driveIds=new Set(data[k].map(x=>x.id));(local[k]||[]).forEach(x=>{if(x.id&&!driveIds.has(x.id)){data[k].push(x);hadOfflineData=true;}});});dedupeData();saveLocal();if(hadOfflineData){setTimeout(async()=>{await save();toast('✅ Offline entries synced to Drive!');},300);}return true;}catch(e){loadLocal();return false;}}
 async function findOrCreateDriveFile(){
   // Check stored file ID — verify it exists and is not trashed
   const storedId=await dbGet('gdriveFileId');
@@ -471,13 +472,19 @@ function updateHdr(){
   const driveBanner=(!gdriveToken||!gdriveFileId)?`<div style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);border-radius:8px;padding:7px 10px;margin-bottom:10px;font-size:12px;color:#fca5a5;display:flex;align-items:center;justify-content:space-between;gap:8px"><span>⚠️ Not syncing to Drive — changes are local only</span><button onclick="connectFolder()" style="background:rgba(239,68,68,.3);border:none;border-radius:6px;color:#fca5a5;font-size:11px;font-weight:700;padding:3px 8px;cursor:pointer">Reconnect</button></div>`:'';
   document.getElementById('header').innerHTML=`
     ${driveBanner}
-    <div class="hdr-lbl">Net Worth</div>
-    <div class="hdr-bal">${fmtPHP(nw)}</div>
+    <div style="display:flex;align-items:flex-start;justify-content:space-between">
+      <div>
+        <div class="hdr-lbl">Net Worth</div>
+        <div class="hdr-bal">${balHidden?'₱ ••••••':fmtPHP(nw)}</div>
+      </div>
+      <button onclick="toggleBal()" style="background:rgba(255,255,255,.12);border:none;border-radius:8px;padding:4px 10px;color:rgba(255,255,255,.7);font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;margin-top:2px">${balHidden?'Show':'Hide'}</button>
+    </div>
     <div class="hdr-pills">
-      <span class="pill red">Spent ${fmtPHP(spent)}</span>
-      ${pct!==null?`<span class="pill ${pct>=0?'green':'red'}">Saved ${pct}%</span>`:`<span class="pill muted">${monthLabel(m)}</span>`}
+      ${balHidden?`<span class="pill muted">Balance hidden</span>`:`<span class="pill red">Spent ${fmtPHP(spent)}</span>${pct!==null?`<span class="pill ${pct>=0?'green':'red'}">Saved ${pct}%</span>`:`<span class="pill muted">${monthLabel(m)}</span>`}`}
     </div>`;
 }
+
+function toggleBal(){balHidden=!balHidden;localStorage.setItem('balHidden',balHidden?'1':'0');updateHdr();}
 
 // ── LOG VIEW ──────────────────────────────
 function buildLog(){
@@ -834,6 +841,7 @@ function openAddWModal(){
 function updWTF(){const t=document.getElementById('wType')?.value;document.getElementById('wL4F').style.display=t==='bank'?'block':'none';document.getElementById('wBF').style.display=t==='investment'?'block':'none';}
 function pickColor(c,el){selColor=c;document.querySelectorAll('.sw').forEach(s=>s.classList.remove('sel'));el.classList.add('sel');}
 let _savingWallet=false;
+let _savingGoal=false;
 async function saveWallet(){
   if(_savingWallet)return;_savingWallet=true;
   const name=document.getElementById('wName')?.value?.trim();if(!name){_savingWallet=false;toast('Enter a name.');return;}
@@ -1016,12 +1024,14 @@ function buildGoalFields(type){
 }
 
 async function saveGoal(){
+  if(_savingGoal)return;_savingGoal=true;
   const typeEl=document.querySelector('.gt.sel');const type=typeEl?.id?.replace('gt_','')||'savings_rate';
-  const title=document.getElementById('gTitle')?.value?.trim();if(!title){toast('Enter a title.');return;}
+  const title=document.getElementById('gTitle')?.value?.trim();if(!title){_savingGoal=false;toast('Enter a title.');return;}
   const goal={id:uid(),type,title,active:true,createdAt:today(),targetValue:parseFloat(document.getElementById('gTarget')?.value)||0,deadline:document.getElementById('gDeadline')?.value||null,notes:document.getElementById('gNotes')?.value||'',categoryId:document.getElementById('gCat')?.value||null,savedAmount:parseFloat(document.getElementById('gSaved')?.value)||0,monthlyIncome:parseFloat(document.getElementById('gIncome')?.value)||0};
   if(goal.monthlyIncome)data.settings.monthlyIncome=goal.monthlyIncome;
   data.goals.push(goal);
   await save();closeM();toast('✅ Goal added!');renderView();
+  _savingGoal=false;
 }
 
 function openEditGoalModal(id){
