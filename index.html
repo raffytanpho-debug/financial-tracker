@@ -736,15 +736,15 @@ function buildAdvisor(){
 
     <div class="nw-hero">
       <div class="nw-lbl">Net Worth</div>
-      <div class="nw-total">${fmtPHP(nw)}</div>
+      <div class="nw-total">${balHidden?'••••••':fmtPHP(nw)}</div>
       <div class="nw-bk">
-        <div><div class="nw-bk-lbl">Cash & Banks</div><div class="nw-bk-val">${fmtPHP(cash)}</div></div>
-        <div><div class="nw-bk-lbl">Investments</div><div class="nw-bk-val">${fmtPHP(inv)}</div></div>
+        <div><div class="nw-bk-lbl">Cash & Banks</div><div class="nw-bk-val">${balHidden?'••••':fmtPHP(cash)}</div></div>
+        <div><div class="nw-bk-lbl">Investments</div><div class="nw-bk-val">${balHidden?'••••':fmtPHP(inv)}</div></div>
       </div>
     </div>
 
     ${data.wallets.length?`<div class="card"><div class="card-title">All Accounts</div>
-      ${data.wallets.map(w=>{const b=wPHP(w.id);return`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)"><span style="font-size:18px">${w.icon||'💳'}</span><span style="flex:1;font-size:14px;font-weight:600">${esc(w.name)}</span><span style="font-size:14px;font-weight:800;color:${b<0?'var(--red)':'var(--text)'}">${fmtPHP(b)}</span></div>`;}).join('')}
+      ${data.wallets.map(w=>{const b=wPHP(w.id);return`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)"><span style="font-size:18px">${w.icon||'💳'}</span><span style="flex:1;font-size:14px;font-weight:600">${esc(w.name)}</span><span style="font-size:14px;font-weight:800;color:${b<0?'var(--red)':'var(--text)'}">${balHidden?'••••':fmtPHP(b)}</span></div>`;}).join('')}
     </div>`:''}
 
     ${months.length>=2?`<div class="card"><div class="card-title">Net Worth Trend</div><div class="chart-wrap" style="height:170px"><canvas id="nwChart"></canvas></div></div>`:''}
