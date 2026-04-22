@@ -540,7 +540,6 @@ function buildLog(){
 }
 
 function buildTxRow(tx){
-  const c=catById(tx.cat);
   const w=wById(tx.walletId||tx.fromWalletId);
   if(tx.type==='transfer'){
     const tw=wById(tx.toWalletId);
@@ -548,6 +547,14 @@ function buildTxRow(tx){
   }
   if(tx.type==='adjustment'){
     return`<div class="tx" style="border-left-color:#6b7280" onclick="openEditModal('${tx.id}')"><div class="tx-ico" style="background:rgba(107,114,128,.15)">⚖️</div><div class="tx-info"><div class="tx-desc">${esc(tx.desc||'Reconciliation Adjustment')}</div><div class="tx-sub">Adjustment · ${esc(w?.name||'')}</div></div><div class="tx-amt adjust">${tx.amount>=0?'+':''}${fmtPHP(tx.amountPHP||tx.amount)}</div></div>`;
+  }
+  // Income rows use ITYPES (via incomeType). Expense rows use CATS (via cat).
+  let c;
+  if(tx.type==='income'){
+    const it=ITYPES.find(t=>t.id===tx.incomeType)||{label:'Income',icon:'💰'};
+    c={name:it.label,icon:it.icon,color:'#2cb67d'};
+  } else {
+    c=catById(tx.cat);
   }
   const iUSD=w?.currency==='USD';
   const amtStr=tx.type==='income'?`+${iUSD?fmtUSD(tx.amount)+' ':''}`+fmtPHP(tx.amountPHP||tx.amount):tx.amount?`-${iUSD?fmtUSD(tx.amount)+' ':''}`+fmtPHP(tx.amountPHP||tx.amount):'No amount';
@@ -807,11 +814,21 @@ function pickCat(id){pendingCat=id;const c=catById(id);const ico=document.getEle
 function openEditModal(id){
   const tx=data.transactions.find(t=>t.id===id);if(!tx)return;
   const wOpts=data.wallets.map(w=>`<option value="${w.id}" ${w.id===tx.walletId?'selected':''}>${w.icon||''} ${esc(w.name)}</option>`).join('');
-  const cOpts=CATS.map(c=>`<option value="${c.id}" ${c.id===tx.cat?'selected':''}>${c.icon} ${c.name}</option>`).join('');
+  // Income → show ITYPES dropdown bound to tx.incomeType.
+  // Expense/adjustment → show CATS dropdown bound to tx.cat (as before).
+  // Transfer → no category field.
+  let catField='';
+  if(tx.type==='income'){
+    const iOpts=ITYPES.map(t=>`<option value="${t.id}" ${t.id===tx.incomeType?'selected':''}>${t.icon} ${t.label}</option>`).join('');
+    catField=`<div class="mf"><div class="ml">Income Type</div><select class="ms" id="eInc">${iOpts}</select></div>`;
+  }else if(tx.type!=='transfer'){
+    const cOpts=CATS.map(c=>`<option value="${c.id}" ${c.id===tx.cat?'selected':''}>${c.icon} ${c.name}</option>`).join('');
+    catField=`<div class="mf"><div class="ml">Category</div><select class="ms" id="eCat">${cOpts}</select></div>`;
+  }
   openM(`<div class="mdt">Edit</div>
     <div class="mf"><div class="ml">Description</div><input class="mi" id="eDesc" value="${esc(tx.desc||'')}"></div>
     <div class="mf"><div class="ml">Amount</div><input class="mi" id="eAmt" type="number" value="${tx.amount||''}"></div>
-    ${tx.type!=='transfer'?`<div class="mf"><div class="ml">Category</div><select class="ms" id="eCat">${cOpts}</select></div>`:''}
+    ${catField}
     ${tx.type!=='transfer'?`<div class="mf"><div class="ml">Wallet</div><select class="ms" id="eWal">${wOpts}</select></div>`:''}
     <div class="mf"><div class="ml">Date</div><input class="mi" id="eDate" type="date" value="${tx.date}"></div>
     <div class="ma"><button class="mb danger" onclick="doDelTx('${id}')">Delete</button><button class="mb cancel" onclick="closeM()">Cancel</button><button class="mb primary" onclick="doSaveTx('${id}')">Save</button></div>`);
@@ -821,7 +838,21 @@ async function doSaveTx(id){
   const amount=parseFloat(document.getElementById('eAmt')?.value)||0;
   const walletId=document.getElementById('eWal')?.value||tx.walletId;
   const w=wById(walletId);
-  await updTx(id,{desc:document.getElementById('eDesc')?.value?.trim()||tx.desc,amount,amountPHP:toPHP(amount,w?.currency||'PHP'),cat:document.getElementById('eCat')?.value||tx.cat,walletId,date:document.getElementById('eDate')?.value||tx.date});
+  const updates={
+    desc:document.getElementById('eDesc')?.value?.trim()||tx.desc,
+    amount,
+    amountPHP:toPHP(amount,w?.currency||'PHP'),
+    walletId,
+    date:document.getElementById('eDate')?.value||tx.date
+  };
+  if(tx.type==='income'){
+    // Income is categorized by incomeType. Keep cat pinned to 'other' by design.
+    updates.incomeType=document.getElementById('eInc')?.value||tx.incomeType||'other';
+    updates.cat='other';
+  }else{
+    updates.cat=document.getElementById('eCat')?.value||tx.cat;
+  }
+  await updTx(id,updates);
   closeM();toast('Updated!');renderView();updateHdr();
 }
 async function doDelTx(id){if(!confirm('Delete?'))return;await delTx(id);closeM();renderView();updateHdr();}
