@@ -256,13 +256,6 @@ const CATS=[
 const ITYPES=[{id:'salary',label:'Salary',icon:'💼'},{id:'freelance',label:'Freelance / Client',icon:'💻'},{id:'returns',label:'Investment Returns',icon:'📈'},{id:'other',label:'Other',icon:'💰'}];
 const WICONS={credit:'💳',bank:'🏦',ewallet:'📱',usd:'💵',investment:'📈'};
 const WCOLS=['#7c5cbf','#ef4565','#2cb67d','#4cc9f0','#f59e0b','#ec4899','#3b82f6','#10b981','#f97316','#a78bfa'];
-const GTYPES=[
-  {id:'savings_rate',label:'Savings Rate',icon:'💰',desc:'Target savings % of income'},
-  {id:'income_growth',label:'Grow Income',icon:'📈',desc:'Monthly income target'},
-  {id:'fund_goal',label:'Save for Something',icon:'🎯',desc:'Save a specific amount'},
-  {id:'reduce_cat',label:'Reduce Spending',icon:'✂️',desc:'Spend less in a category'},
-  {id:'custom',label:'Custom Goal',icon:'✏️',desc:'Free text goal for AI context'}
-];
 const DEF={version:4,settings:{usdRate:56.5,usdRateDate:null,usdRateManual:null,defaultWalletId:null,proxyUrl:'',apiKey:'',autoRefresh:true},wallets:[],transactions:[],investmentValues:[],goals:[],insights:{text:null,lastUpdated:null}};
 
 // ═══ STATE ═══════════════════════════════════════════════════════════
@@ -309,34 +302,6 @@ function netWorth(){return data.wallets.reduce((s,w)=>s+wPHP(w.id),0)}
 function mSpend(m){return data.transactions.filter(t=>t.type==='expense'&&t.date.slice(0,7)===m).reduce((s,t)=>s+(Number(t.amountPHP)||0),0)}
 function mIncome(m){return data.transactions.filter(t=>t.type==='income'&&t.date.slice(0,7)===m).reduce((s,t)=>s+(Number(t.amountPHP)||0),0)}
 
-// ═══ GOAL PROGRESS ════════════════════════════════════════════════════
-function goalProgress(g){
-  const m=ym();
-  const spent=mSpend(m);
-  const inc=mIncome(m);
-  if(g.type==='savings_rate'){
-    const totalInc=inc||g.monthlyIncome||0;
-    const saved=totalInc-spent;
-    const rate=totalInc>0?Math.round((saved/totalInc)*100):0;
-    const pct=Math.min(100,Math.round((rate/(g.targetValue||30))*100));
-    return{current:rate,target:g.targetValue,unit:'%',pct,label:`${rate}% saved vs ${g.targetValue}% target`,status:rate>=g.targetValue?'on-track':rate>=(g.targetValue*.8)?'at-risk':'behind'};
-  }
-  if(g.type==='income_growth'){
-    const pct=g.targetValue?Math.min(100,Math.round((inc/g.targetValue)*100)):0;
-    return{current:inc,target:g.targetValue,unit:'₱',pct,label:`${fmtPHP(inc)} of ${fmtPHP(g.targetValue)} target`,status:pct>=100?'on-track':pct>=80?'at-risk':'behind'};
-  }
-  if(g.type==='fund_goal'){
-    const saved=g.savedAmount||0;
-    const pct=g.targetValue?Math.min(100,Math.round((saved/g.targetValue)*100)):0;
-    return{current:saved,target:g.targetValue,unit:'₱',pct,label:`${fmtPHP(saved)} of ${fmtPHP(g.targetValue)} saved`,status:pct>=100?'on-track':pct>=60?'at-risk':'behind'};
-  }
-  if(g.type==='reduce_cat'){
-    const catSpent=data.transactions.filter(t=>t.type==='expense'&&t.date.slice(0,7)===m&&t.cat===g.categoryId).reduce((s,t)=>s+(Number(t.amountPHP)||0),0);
-    const pct=g.targetValue?Math.max(0,Math.round(((g.targetValue-catSpent)/g.targetValue)*100)):0;
-    return{current:catSpent,target:g.targetValue,unit:'₱',pct,label:`${fmtPHP(catSpent)} spent vs ${fmtPHP(g.targetValue)} limit`,status:catSpent<=g.targetValue?'on-track':catSpent<=(g.targetValue*1.2)?'at-risk':'behind'};
-  }
-  return{pct:0,label:g.notes||'Custom goal',status:'at-risk'};
-}
 
 // ═══ STORAGE ═════════════════════════════════════════════════════════
 function dedupeData(){['wallets','transactions','investmentValues','goals'].forEach(k=>{if(Array.isArray(data[k])){const seen=new Set();data[k]=data[k].filter(x=>{if(seen.has(x.id))return false;seen.add(x.id);return true;});}});}
@@ -408,7 +373,7 @@ async function generateInsights(){
   const catTots={};
   data.transactions.filter(t=>t.type==='expense'&&t.date.slice(0,7)===m).forEach(t=>{catTots[t.cat]=(catTots[t.cat]||0)+(Number(t.amountPHP)||0);});
   const catBreakdown=Object.entries(catTots).sort((a,b)=>b[1]-a[1]).map(([id,amt])=>`  ${catById(id).name}: ${fmtPHP(amt)}`).join('\n');
-  const goalsText=data.goals.filter(g=>g.active).map(g=>{const p=goalProgress(g);return`  - ${g.title}: ${p.label} (${p.status})`;}).join('\n')||'  No goals set yet.';
+  const goalsText=data.goals.filter(g=>g.active).map(g=>`  - ${g.title}${g.body?': '+g.body:''}`).join('\n')||'  No goals set yet.';
 
   const prompt=`You are a personal financial advisor for Raffy, a freelance web consultant in the Philippines. Analyze his data and give sharp, specific insights.
 
@@ -723,13 +688,10 @@ function buildAdvisor(){
         <div class="card-title" style="margin-bottom:0">🎯 My Goals</div>
         <button class="fx-btn" onclick="openAddGoalModal()">+ Add</button>
       </div>
-      ${goals.length?goals.map(g=>{
-        const p=goalProgress(g);
-        return`<div class="goal-card" onclick="openEditGoalModal('${g.id}')">
-          <div class="goal-hdr"><span class="goal-title">${esc(g.title)}</span><span class="goal-pct ${p.status}">${p.pct}%</span></div>
-          <div class="goal-bar-bg"><div class="goal-bar-fill" style="width:${p.pct}%;background:${p.status==='on-track'?'var(--green)':p.status==='at-risk'?'var(--yellow)':'var(--red)'}"></div></div>
-          <div class="goal-sub">${esc(p.label)}</div>
-        </div>`;}).join(''):`<div style="text-align:center;padding:16px;color:var(--muted);font-size:13px">No goals yet — tap + Add to set one</div>`}
+      ${goals.length?goals.map(g=>`<div class="goal-card" onclick="openEditGoalModal('${g.id}')">
+          <div class="goal-title">${esc(g.title)}</div>
+          ${g.body?`<div class="goal-sub" style="margin-top:5px">${esc(g.body)}</div>`:''}
+        </div>`).join(''):`<div style="text-align:center;padding:16px;color:var(--muted);font-size:13px">No goals yet — tap + Add to set one</div>`}
     </div>
 
     <div class="insight-card">
@@ -1035,38 +997,17 @@ async function clearManRate(){data.settings.usdRateManual=null;await save();clos
 
 // GOALS
 function openAddGoalModal(){
-  let selType='savings_rate';
   openM(`<div class="mdt">Add Goal</div>
-    <div class="mf"><div class="ml">Goal Type</div>
-      <div class="goal-type-grid">
-        ${GTYPES.map(g=>`<div class="gt ${g.id==='savings_rate'?'sel':''}" id="gt_${g.id}" onclick="selGoalType('${g.id}')"><span class="gt-ico">${g.icon}</span><span>${g.label}</span></div>`).join('')}
-      </div>
-    </div>
-    <div class="mf"><div class="ml">Goal Title</div><input class="mi" id="gTitle" placeholder="e.g. Hit 30% savings rate"></div>
-    <div id="gDynFields">${buildGoalFields('savings_rate')}</div>
+    <div class="mf"><div class="ml">Name</div><input class="mi" id="gTitle" placeholder="e.g. Build emergency fund"></div>
+    <div class="mf"><div class="ml">Details (used by AI)</div><textarea class="mi" id="gBody" rows="3" placeholder="e.g. Want ₱300K saved by end of 2026, setting aside ₱25K/month."></textarea></div>
     <div class="ma"><button class="mb cancel" onclick="closeM()">Cancel</button><button class="mb primary" onclick="saveGoal()">Add Goal</button></div>`);
-}
-
-function selGoalType(id){
-  document.querySelectorAll('.gt').forEach(el=>el.classList.remove('sel'));
-  document.getElementById('gt_'+id)?.classList.add('sel');
-  document.getElementById('gDynFields').innerHTML=buildGoalFields(id);
-}
-
-function buildGoalFields(type){
-  if(type==='savings_rate')return`<div class="mf"><div class="ml">Target Savings Rate (%)</div><input class="mi" id="gTarget" type="number" placeholder="30"></div><div class="mf"><div class="ml">Your Monthly Income (₱)</div><input class="mi" id="gIncome" type="number" placeholder="0" value="${data.settings.monthlyIncome||''}"></div>`;
-  if(type==='income_growth')return`<div class="mf"><div class="ml">Monthly Income Target (₱)</div><input class="mi" id="gTarget" type="number" placeholder="100000"></div><div class="mf"><div class="ml">Deadline</div><input class="mi" id="gDeadline" type="date"></div>`;
-  if(type==='fund_goal')return`<div class="mf"><div class="ml">Target Amount (₱)</div><input class="mi" id="gTarget" type="number" placeholder="500000"></div><div class="mf"><div class="ml">Already Saved (₱)</div><input class="mi" id="gSaved" type="number" placeholder="0"></div><div class="mf"><div class="ml">Deadline</div><input class="mi" id="gDeadline" type="date"></div>`;
-  if(type==='reduce_cat')return`<div class="mf"><div class="ml">Category to Reduce</div><select class="ms" id="gCat">${CATS.filter(c=>c.id!=='adjust'&&c.id!=='other').map(c=>`<option value="${c.id}">${c.icon} ${c.name}</option>`).join('')}</select></div><div class="mf"><div class="ml">Monthly Spending Limit (₱)</div><input class="mi" id="gTarget" type="number" placeholder="5000"></div>`;
-  return`<div class="mf"><div class="ml">Describe your goal (used by AI)</div><textarea class="mi" id="gNotes" rows="3" placeholder="e.g. I want to build a house worth ₱3M by 2028 and save ₱50K/month toward it."></textarea></div>`;
 }
 
 async function saveGoal(){
   if(_savingGoal)return;_savingGoal=true;
-  const typeEl=document.querySelector('.gt.sel');const type=typeEl?.id?.replace('gt_','')||'savings_rate';
   const title=document.getElementById('gTitle')?.value?.trim();if(!title){_savingGoal=false;toast('Enter a title.');return;}
-  const goal={id:uid(),type,title,active:true,createdAt:today(),targetValue:parseFloat(document.getElementById('gTarget')?.value)||0,deadline:document.getElementById('gDeadline')?.value||null,notes:document.getElementById('gNotes')?.value||'',categoryId:document.getElementById('gCat')?.value||null,savedAmount:parseFloat(document.getElementById('gSaved')?.value)||0,monthlyIncome:parseFloat(document.getElementById('gIncome')?.value)||0};
-  if(goal.monthlyIncome)data.settings.monthlyIncome=goal.monthlyIncome;
+  const body=document.getElementById('gBody')?.value?.trim()||'';
+  const goal={id:uid(),title,body,active:true,createdAt:today()};
   data.goals.push(goal);
   await save();closeM();toast('✅ Goal added!');renderView();
   _savingGoal=false;
@@ -1074,16 +1015,9 @@ async function saveGoal(){
 
 function openEditGoalModal(id){
   const g=data.goals.find(g=>g.id===id);if(!g)return;
-  const p=goalProgress(g);
-  openM(`<div class="mdt">${esc(g.title)}</div>
-    <div style="text-align:center;padding:10px 0 14px;border-bottom:1px solid var(--border);margin-bottom:14px">
-      <div style="font-size:30px;font-weight:800;color:${p.status==='on-track'?'var(--green)':p.status==='at-risk'?'var(--yellow)':'var(--red)'}">${p.pct}%</div>
-      <div style="font-size:13px;color:var(--muted);margin-top:3px">${esc(p.label)}</div>
-    </div>
-    ${g.type==='fund_goal'?`<div class="mf"><div class="ml">Amount Saved So Far (₱)</div><input class="mi" id="gSavedEdit" type="number" value="${g.savedAmount||0}"></div>`:''}
-    ${g.type==='savings_rate'?`<div class="mf"><div class="ml">Your Monthly Income (₱)</div><input class="mi" id="gIncomeEdit" type="number" value="${g.monthlyIncome||data.settings.monthlyIncome||0}"></div>`:''}
-    <div class="mf"><div class="ml">Target</div><input class="mi" id="gTargetEdit" type="number" value="${g.targetValue||0}"></div>
-    <div class="mf"><div class="ml">Notes (for AI context)</div><textarea class="mi" id="gNotesEdit" rows="2">${esc(g.notes||'')}</textarea></div>
+  openM(`<div class="mdt">Edit Goal</div>
+    <div class="mf"><div class="ml">Name</div><input class="mi" id="gTitleEdit" value="${esc(g.title)}"></div>
+    <div class="mf"><div class="ml">Details (used by AI)</div><textarea class="mi" id="gBodyEdit" rows="3">${esc(g.body||'')}</textarea></div>
     <div class="ma">
       <button class="mb danger" onclick="archiveGoal('${id}')">Archive</button>
       <button class="mb cancel" onclick="closeM()">Cancel</button>
@@ -1093,10 +1027,9 @@ function openEditGoalModal(id){
 
 async function updateGoal(id){
   const g=data.goals.find(g=>g.id===id);if(!g)return;
-  g.targetValue=parseFloat(document.getElementById('gTargetEdit')?.value)||g.targetValue;
-  g.notes=document.getElementById('gNotesEdit')?.value||'';
-  const saved=parseFloat(document.getElementById('gSavedEdit')?.value);if(!isNaN(saved))g.savedAmount=saved;
-  const inc=parseFloat(document.getElementById('gIncomeEdit')?.value);if(!isNaN(inc)){g.monthlyIncome=inc;data.settings.monthlyIncome=inc;}
+  const title=document.getElementById('gTitleEdit')?.value?.trim();if(!title)return toast('Enter a title.');
+  g.title=title;
+  g.body=document.getElementById('gBodyEdit')?.value?.trim()||'';
   await save();closeM();toast('Goal updated!');renderView();updateHdr();
 }
 
@@ -1110,10 +1043,28 @@ function destroyCharts(){Object.values(charts).forEach(c=>{try{c.destroy();}catc
 let _tt;
 function toast(msg){const t=document.getElementById('T');t.textContent=msg;t.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>t.classList.remove('show'),2800);}
 
+// ═══ GOAL MIGRATION ═══════════════════════════════════════════════════
+async function migrateGoals(){
+  let migrated=false;
+  data.goals=data.goals.map(g=>{
+    if(!g.type)return g; // already on new schema
+    migrated=true;
+    let body='';
+    if(g.type==='savings_rate')body=`Target ${g.targetValue||30}% savings rate${g.monthlyIncome?' (₱'+Number(g.monthlyIncome).toLocaleString()+'/mo income)':''}`;
+    else if(g.type==='income_growth')body=`Monthly income target: ₱${Number(g.targetValue||0).toLocaleString()}${g.deadline?' by '+g.deadline:''}`;
+    else if(g.type==='fund_goal')body=`Save ₱${Number(g.targetValue||0).toLocaleString()}${g.savedAmount?' (₱'+Number(g.savedAmount).toLocaleString()+' saved)':''}${g.deadline?' by '+g.deadline:''}`;
+    else if(g.type==='reduce_cat')body=`Reduce spending on ${g.categoryId||'category'}: limit ₱${Number(g.targetValue||0).toLocaleString()}/mo`;
+    if(g.notes)body+=(body?'. ':'')+g.notes;
+    return{id:g.id,title:g.title,body:body.trim(),active:g.active,createdAt:g.createdAt||today()};
+  });
+  if(migrated)await save();
+}
+
 // ═══ INIT ════════════════════════════════════════════════════════════
 async function init(){
   loadLocal();
   await tryRestoreFolder();
+  await migrateGoals();
   if(!data.settings.usdRateDate||data.settings.usdRateDate<today())fetchRate();
   // Auto-refresh insights once per day
   if(data.settings.proxyUrl&&data.insights?.lastUpdated){
