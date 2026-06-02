@@ -484,7 +484,7 @@ function updateHdr(){
     </div>`;
 }
 
-function toggleBal(){balHidden=!balHidden;localStorage.setItem('balHidden',balHidden?'1':'0');updateHdr();}
+function toggleBal(){balHidden=!balHidden;localStorage.setItem('balHidden',balHidden?'1':'0');updateHdr();if(view==='advisor'||view==='stats')renderView();}
 
 // ── LOG VIEW ──────────────────────────────
 function buildLog(){
@@ -518,17 +518,20 @@ function buildLog(){
             <span id="catIco">${catById(pendingCat).icon}</span>
             <span id="catNm">${catById(pendingCat).name}</span>
           </span>
+          <input class="mamt" id="logDate" type="date" value="${today()}" style="width:140px"/>
         </div>`:logType==='income'?`
         <div class="log-meta">
           <input class="mamt" id="incAmtInp" type="number" inputmode="decimal" placeholder="₱ Amount"/>
           <select class="msel" id="incTypeInp">${ITYPES.map(t=>`<option value="${t.id}">${t.icon} ${t.label}</option>`).join('')}</select>
           <select class="msel" id="incWalInp">${wOpts}</select>
+          <input class="mamt" id="logDate" type="date" value="${today()}" style="width:140px"/>
         </div>`:`
         <div class="log-meta" style="align-items:center">
           <select class="msel" id="fromInp">${wOpts}</select>
           <span style="color:var(--muted);font-size:16px">→</span>
           <select class="msel" id="toInp">${wOpts}</select>
           <input class="mamt" id="trAmtInp" type="number" inputmode="decimal" placeholder="Amount"/>
+          <input class="mamt" id="logDate" type="date" value="${today()}" style="width:140px"/>
         </div>`}
     </div>
     ${noW?`<div class="empty"><div class="empty-ico">💳</div><div class="empty-txt">Add a wallet first</div><div class="empty-sub">Go to the Wallets tab</div></div>`:
@@ -591,6 +594,7 @@ async function submitLog(){
   if(_savingTx)return;_savingTx=true;
   if(data.wallets.length===0){_savingTx=false;toast('Add a wallet first!');return;}
   const inp=document.getElementById('logInp');
+  const date=document.getElementById('logDate')?.value||today();
   if(logType==='expense'){
     const raw=inp.value.trim();
     const{desc,amount:pa,catId}=parseInp(raw||'expense');
@@ -598,7 +602,7 @@ async function submitLog(){
     const walletId=document.getElementById('walInp')?.value;
     const w=wById(walletId);const cur=w?.currency||'PHP';
     if(!raw&&!amount){_savingTx=false;toast('Enter a description or amount.');return;}
-    await addTx({date:today(),type:'expense',desc:desc||raw,amount,amountPHP:toPHP(amount,cur),cat:pendingCat||catId,walletId});
+    await addTx({date,type:'expense',desc:desc||raw,amount,amountPHP:toPHP(amount,cur),cat:pendingCat||catId,walletId});
     inp.value='';const ai=document.getElementById('amtInp');if(ai)ai.value='';
     toast(`${catById(pendingCat||catId).icon} ${desc||raw}${amount?' — '+fmtPHP(toPHP(amount,cur)):''}`);
   }else if(logType==='income'){
@@ -608,7 +612,7 @@ async function submitLog(){
     const incomeType=document.getElementById('incTypeInp')?.value||'other';
     const desc=inp.value.trim()||ITYPES.find(t=>t.id===incomeType)?.label||'Income';
     const w=wById(walletId);const amountPHP=toPHP(amount,w?.currency||'PHP');
-    await addTx({date:today(),type:'income',desc,amount,amountPHP,cat:'other',walletId,incomeType});
+    await addTx({date,type:'income',desc,amount,amountPHP,cat:'other',walletId,incomeType});
     inp.value='';document.getElementById('incAmtInp').value='';
     toast(`💰 +${fmtPHP(amountPHP)} logged`);
   }else{
@@ -618,7 +622,7 @@ async function submitLog(){
     const toWalletId=document.getElementById('toInp')?.value;
     if(fromWalletId===toWalletId){_savingTx=false;toast('Pick two different wallets.');return;}
     const desc=inp.value.trim()||'Transfer';
-    await addTx({date:today(),type:'transfer',desc,amount,amountPHP:amount,cat:'other',fromWalletId,toWalletId});
+    await addTx({date,type:'transfer',desc,amount,amountPHP:amount,cat:'other',fromWalletId,toWalletId});
     inp.value='';document.getElementById('trAmtInp').value='';
     const fw=wById(fromWalletId),tw=wById(toWalletId);
     toast(`↔ ${fw?.name} → ${tw?.name} — ${fmtPHP(amount)}`);
