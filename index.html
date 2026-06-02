@@ -277,7 +277,7 @@ function fmtDate(d){const t=today();if(d===t)return'Today';if(d===prevDay(t))ret
 function monthLabel(m){const[y,mo]=m.split('-');return new Date(y,mo-1).toLocaleDateString('en-PH',{month:'long',year:'numeric'})}
 function catById(id){return CATS.find(c=>c.id===id)||CATS[CATS.length-1]}
 function wById(id){return data.wallets.find(w=>w.id===id)}
-function defW(){if(data.settings.defaultWalletId){const w=wById(data.settings.defaultWalletId);if(w)return w;}return data.wallets[0]||null}
+function defW(){if(data.settings.defaultWalletId){const w=wById(data.settings.defaultWalletId);if(w&&!w.deleted)return w;}return data.wallets.find(w=>!w.deleted)||null}
 function detectCat(text){const lo=text.toLowerCase();for(const c of CATS){if(c.kw.some(k=>lo.includes(k)))return c.id;}return'other'}
 function parseInp(raw){const text=raw.trim();const m=text.match(/(\d[\d,]*(?:\.\d+)?)/);let amount=null,desc=text;if(m){amount=parseFloat(m[1].replace(',',''));desc=text.replace(m[0],'').replace(/\s+/g,' ').trim()||text;}return{desc:desc||text,amount,catId:detectCat(text)}}
 
@@ -285,7 +285,7 @@ function parseInp(raw){const text=raw.trim();const m=text.match(/(\d[\d,]*(?:\.\
 function computeBal(wid){
   const w=wById(wid);if(!w)return 0;
   let b=Number(w.openingBalance)||0;
-  data.transactions.forEach(tx=>{
+  data.transactions.filter(tx=>!tx.deleted).forEach(tx=>{
     if(tx.type==='expense'&&tx.walletId===wid)       b-=Number(tx.amount)||0;
     else if(tx.type==='income'&&tx.walletId===wid)   b+=Number(tx.amount)||0;
     else if(tx.type==='adjustment'&&tx.walletId===wid)b+=Number(tx.amount)||0;
@@ -298,9 +298,9 @@ function computeBal(wid){
 }
 function latestInv(wid){return data.investmentValues.filter(v=>v.walletId===wid).sort((a,b)=>b.month.localeCompare(a.month))[0]||null}
 function wPHP(wid){const w=wById(wid);if(!w)return 0;if(w.type==='investment'){const inv=latestInv(wid);return inv?toPHP(inv.currentValue,w.currency):toPHP(computeBal(wid),w.currency);}return toPHP(computeBal(wid),w.currency)}
-function netWorth(){return data.wallets.reduce((s,w)=>s+wPHP(w.id),0)}
-function mSpend(m){return data.transactions.filter(t=>t.type==='expense'&&t.date.slice(0,7)===m).reduce((s,t)=>s+(Number(t.amountPHP)||0),0)}
-function mIncome(m){return data.transactions.filter(t=>t.type==='income'&&t.date.slice(0,7)===m).reduce((s,t)=>s+(Number(t.amountPHP)||0),0)}
+function netWorth(){return data.wallets.filter(w=>!w.deleted).reduce((s,w)=>s+wPHP(w.id),0)}
+function mSpend(m){return data.transactions.filter(t=>!t.deleted&&t.type==='expense'&&t.date.slice(0,7)===m).reduce((s,t)=>s+(Number(t.amountPHP)||0),0)}
+function mIncome(m){return data.transactions.filter(t=>!t.deleted&&t.type==='income'&&t.date.slice(0,7)===m).reduce((s,t)=>s+(Number(t.amountPHP)||0),0)}
 
 
 // ═══ STORAGE ═════════════════════════════════════════════════════════
@@ -318,7 +318,8 @@ function trySilentAuth(){return new Promise(resolve=>{if(!window.google?.account
 function silentTokenRefresh(){trySilentAuth();}
 async function maybeRefreshToken(){if(!gdriveFileId)return;const expiry=await dbGet('gdriveExpiry');if(!gdriveToken||!expiry||Date.now()>expiry-60000)trySilentAuth();}
 async function save(){saveLocal();if(!gdriveToken||!gdriveFileId)return;try{await fetch(`https://www.googleapis.com/upload/drive/v3/files/${gdriveFileId}?uploadType=media`,{method:'PATCH',headers:{'Authorization':'Bearer '+gdriveToken,'Content-Type':'application/json'},body:JSON.stringify(data,null,2)});}catch(e){console.error('Drive save failed',e);}}
-async function loadFromFolder(){if(!gdriveToken||!gdriveFileId){loadLocal();return false;}try{const local=clone(data);const r=await fetch(`https://www.googleapis.com/drive/v3/files/${gdriveFileId}?alt=media`,{headers:{'Authorization':'Bearer '+gdriveToken}});if(!r.ok)throw 0;const j=await r.json();if(!j.wallets)throw 0;data={...clone(DEF),...j};let hadOfflineData=false;['wallets','transactions','investmentValues','goals'].forEach(k=>{if(!Array.isArray(data[k]))data[k]=[];const driveIds=new Set(data[k].map(x=>x.id));(local[k]||[]).forEach(x=>{if(x.id&&!driveIds.has(x.id)){data[k].push(x);hadOfflineData=true;}});});dedupeData();saveLocal();if(hadOfflineData){setTimeout(async()=>{await save();toast('✅ Offline entries synced to Drive!');},300);}return true;}catch(e){loadLocal();return false;}}
+function mergeArr(remote,local){const map=new Map();let changed=false;(remote||[]).forEach(x=>{if(x.id)map.set(x.id,x);});(local||[]).forEach(x=>{if(!x.id)return;const r=map.get(x.id);if(!r||(x.updatedAt||0)>(r.updatedAt||0)){map.set(x.id,x);changed=true;}});return{arr:Array.from(map.values()),changed};}
+async function loadFromFolder(){if(!gdriveToken||!gdriveFileId){loadLocal();return false;}try{const local=clone(data);const r=await fetch(`https://www.googleapis.com/drive/v3/files/${gdriveFileId}?alt=media`,{headers:{'Authorization':'Bearer '+gdriveToken}});if(!r.ok)throw 0;const j=await r.json();if(!j.wallets)throw 0;data={...clone(DEF),...j};let hadLocalChanges=false;['wallets','transactions','investmentValues','goals'].forEach(k=>{const{arr,changed}=mergeArr(j[k],local[k]);data[k]=arr;if(changed)hadLocalChanges=true;});dedupeData();saveLocal();if(hadLocalChanges){setTimeout(async()=>{await save();toast('✅ Offline entries synced to Drive!');},300);}return true;}catch(e){loadLocal();return false;}}
 async function findOrCreateDriveFile(){
   // Check stored file ID — verify it exists and is not trashed
   const storedId=await dbGet('gdriveFileId');
@@ -373,7 +374,7 @@ async function generateInsights(){
   const rate=inc>0?Math.round(((inc-spent)/inc)*100):null;
   const nw=netWorth();
   const catTots={};
-  data.transactions.filter(t=>t.type==='expense'&&t.date.slice(0,7)===m).forEach(t=>{catTots[t.cat]=(catTots[t.cat]||0)+(Number(t.amountPHP)||0);});
+  data.transactions.filter(t=>!t.deleted&&t.type==='expense'&&t.date.slice(0,7)===m).forEach(t=>{catTots[t.cat]=(catTots[t.cat]||0)+(Number(t.amountPHP)||0);});
   const catBreakdown=Object.entries(catTots).sort((a,b)=>b[1]-a[1]).map(([id,amt])=>`  ${catById(id).name}: ${fmtPHP(amt)}`).join('\n');
   const goalsText=data.goals.filter(g=>g.active).map(g=>`  - ${g.title}${g.body?': '+g.body:''}`).join('\n')||'  No goals set yet.';
 
@@ -459,9 +460,9 @@ function buildLog(){
   const selWid=dw?.id||'';
   const selW=wById(selWid);
   const isUSD=selW?.currency==='USD';
-  const wOpts=data.wallets.map(w=>`<option value="${w.id}" ${w.id===selWid?'selected':''}>${WICONS[w.type]||'💳'} ${esc(w.name)}</option>`).join('');
-  const noW=data.wallets.length===0;
-  const txs=data.transactions.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,60);
+  const wOpts=data.wallets.filter(w=>!w.deleted).map(w=>`<option value="${w.id}" ${w.id===selWid?'selected':''}>${WICONS[w.type]||'💳'} ${esc(w.name)}</option>`).join('');
+  const noW=data.wallets.filter(w=>!w.deleted).length===0;
+  const txs=data.transactions.filter(t=>!t.deleted).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,60);
   const grouped={};txs.forEach(tx=>{(grouped[tx.date]=grouped[tx.date]||[]).push(tx);});
 
   return`
@@ -599,8 +600,8 @@ async function submitLog(){
 
 // ── STATS VIEW ────────────────────────────
 function buildStats(){
-  const exps=data.transactions.filter(t=>t.type==='expense'&&t.date.slice(0,7)===statsMonth);
-  const incs=data.transactions.filter(t=>t.type==='income'&&t.date.slice(0,7)===statsMonth);
+  const exps=data.transactions.filter(t=>!t.deleted&&t.type==='expense'&&t.date.slice(0,7)===statsMonth);
+  const incs=data.transactions.filter(t=>!t.deleted&&t.type==='income'&&t.date.slice(0,7)===statsMonth);
   const spent=exps.reduce((s,t)=>s+(Number(t.amountPHP)||0),0);
   const inc=incs.reduce((s,t)=>s+(Number(t.amountPHP)||0),0)||0;
   const saved=inc-spent;const pct=inc>0?Math.round((saved/inc)*100):null;
@@ -628,11 +629,11 @@ function buildStats(){
 }
 function chgSM(d){const[y,m]=statsMonth.split('-').map(Number);statsMonth=new Date(y,m-1+d,1).toISOString().slice(0,7);destroyCharts();renderView();updateHdr();}
 function detectSpikes(month){
-  const cur={};data.transactions.filter(t=>t.type==='expense'&&t.date.slice(0,7)===month).forEach(t=>{cur[t.cat]=(cur[t.cat]||0)+(Number(t.amountPHP)||0);});
+  const cur={};data.transactions.filter(t=>!t.deleted&&t.type==='expense'&&t.date.slice(0,7)===month).forEach(t=>{cur[t.cat]=(cur[t.cat]||0)+(Number(t.amountPHP)||0);});
   const spikes=[];
   for(const[cid,current]of Object.entries(cur)){
     const prevMs=[-3,-2,-1].map(d=>{const dt=new Date(month+'-01');dt.setMonth(dt.getMonth()+d);return dt.toISOString().slice(0,7);});
-    const vals=prevMs.map(m=>data.transactions.filter(t=>t.type==='expense'&&t.date.slice(0,7)===m&&t.cat===cid).reduce((s,t)=>s+(Number(t.amountPHP)||0),0)).filter(v=>v>0);
+    const vals=prevMs.map(m=>data.transactions.filter(t=>!t.deleted&&t.type==='expense'&&t.date.slice(0,7)===m&&t.cat===cid).reduce((s,t)=>s+(Number(t.amountPHP)||0),0)).filter(v=>v>0);
     if(vals.length<2)continue;
     const avg=vals.reduce((s,v)=>s+v,0)/vals.length;
     const pct=Math.round(((current-avg)/avg)*100);
@@ -642,7 +643,7 @@ function detectSpikes(month){
 }
 function initStatsChart(){
   const canvas=document.getElementById('catChart');if(!canvas)return;
-  const exps=data.transactions.filter(t=>t.type==='expense'&&t.date.slice(0,7)===statsMonth);
+  const exps=data.transactions.filter(t=>!t.deleted&&t.type==='expense'&&t.date.slice(0,7)===statsMonth);
   const catTots={};exps.forEach(t=>{catTots[t.cat]=(catTots[t.cat]||0)+(Number(t.amountPHP)||0);});
   const used=CATS.filter(c=>catTots[c.id]);if(!used.length)return;
   charts.cat=new Chart(canvas,{type:'doughnut',data:{labels:used.map(c=>`${c.icon} ${c.name}`),datasets:[{data:used.map(c=>catTots[c.id]),backgroundColor:used.map(c=>c.color),borderWidth:0,hoverOffset:8}]},options:{responsive:true,maintainAspectRatio:false,cutout:'62%',plugins:{legend:{position:'right',labels:{color:'#9997b5',font:{size:11},boxWidth:11,padding:5}},tooltip:{callbacks:{label:ctx=>` ${fmtPHP(ctx.raw)}`}}}}});
@@ -650,12 +651,12 @@ function initStatsChart(){
 
 // ── WALLETS VIEW ──────────────────────────
 function buildWallets(){
-  const hasUSD=data.wallets.some(w=>w.currency==='USD');
+  const hasUSD=data.wallets.filter(w=>!w.deleted).some(w=>w.currency==='USD');
   const r=xrate();const rd=data.settings.usdRateDate;
   return`
     ${hasUSD?`<div class="fx-bar"><span class="fx-lbl">$1 = <strong>₱${r.toFixed(2)}</strong> ${rd?'· Updated '+rd:''}</span><button class="fx-btn" onclick="openFXModal()">Edit</button></div>`:''}
     <div class="wgrid">
-      ${data.wallets.map(w=>buildWCard(w)).join('')}
+      ${data.wallets.filter(w=>!w.deleted).map(w=>buildWCard(w)).join('')}
       <button class="add-wbtn" onclick="openAddWModal()"><span style="font-size:25px">+</span><span>Add Wallet</span></button>
     </div><div class="gap"></div>`;
 }
@@ -680,9 +681,9 @@ function buildAdvisor(){
   const lastUp=ins.lastUpdated?new Date(ins.lastUpdated).toLocaleString('en-PH',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'Never';
   const hasProxy=!!data.settings.proxyUrl;
   const nw=netWorth();
-  const cash=data.wallets.filter(w=>w.type!=='investment').reduce((s,w)=>s+wPHP(w.id),0);
-  const inv=data.wallets.filter(w=>w.type==='investment').reduce((s,w)=>s+wPHP(w.id),0);
-  const months=[...new Set(data.transactions.map(t=>t.date.slice(0,7)))].sort().slice(-12);
+  const cash=data.wallets.filter(w=>!w.deleted&&w.type!=='investment').reduce((s,w)=>s+wPHP(w.id),0);
+  const inv=data.wallets.filter(w=>!w.deleted&&w.type==='investment').reduce((s,w)=>s+wPHP(w.id),0);
+  const months=[...new Set(data.transactions.filter(t=>!t.deleted).map(t=>t.date.slice(0,7)))].sort().slice(-12);
 
   return`
     <div class="card" style="margin-top:10px">
@@ -718,8 +719,8 @@ function buildAdvisor(){
       </div>
     </div>
 
-    ${data.wallets.length?`<div class="card"><div class="card-title">All Accounts</div>
-      ${data.wallets.map(w=>{const b=wPHP(w.id);return`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)"><span style="font-size:18px">${w.icon||'💳'}</span><span style="flex:1;font-size:14px;font-weight:600">${esc(w.name)}</span><span style="font-size:14px;font-weight:800;color:${b<0?'var(--red)':'var(--text)'}">${balHidden?'••••':fmtPHP(b)}</span></div>`;}).join('')}
+    ${data.wallets.filter(w=>!w.deleted).length?`<div class="card"><div class="card-title">All Accounts</div>
+      ${data.wallets.filter(w=>!w.deleted).map(w=>{const b=wPHP(w.id);return`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)"><span style="font-size:18px">${w.icon||'💳'}</span><span style="flex:1;font-size:14px;font-weight:600">${esc(w.name)}</span><span style="font-size:14px;font-weight:800;color:${b<0?'var(--red)':'var(--text)'}">${balHidden?'••••':fmtPHP(b)}</span></div>`;}).join('')}
     </div>`:''}
 
     ${months.length>=2?`<div class="card"><div class="card-title">Net Worth Trend</div><div class="chart-wrap" style="height:170px"><canvas id="nwChart"></canvas></div></div>`:''}
@@ -728,13 +729,13 @@ function buildAdvisor(){
 
 function initNWChart(){
   const canvas=document.getElementById('nwChart');if(!canvas||data.wallets.length<1)return;
-  const months=[...new Set(data.transactions.map(t=>t.date.slice(0,7)))].sort();if(months.length<2)return;
+  const months=[...new Set(data.transactions.filter(t=>!t.deleted).map(t=>t.date.slice(0,7)))].sort();if(months.length<2)return;
   const history=months.map(m=>{
     const endDate=m+'-31';let total=0;
-    data.wallets.forEach(w=>{
+    data.wallets.filter(w=>!w.deleted).forEach(w=>{
       if(w.type==='investment'){const snaps=data.investmentValues.filter(v=>v.walletId===w.id&&v.month<=m).sort((a,b)=>b.month.localeCompare(a.month));if(snaps[0]){total+=toPHP(snaps[0].currentValue,w.currency);return;}}
       let b=Number(w.openingBalance)||0;
-      data.transactions.filter(tx=>tx.date<=endDate).forEach(tx=>{
+      data.transactions.filter(tx=>!tx.deleted&&tx.date<=endDate).forEach(tx=>{
         if(tx.type==='expense'&&tx.walletId===w.id)b-=Number(tx.amount)||0;
         else if((tx.type==='income'||tx.type==='adjustment')&&tx.walletId===w.id)b+=Number(tx.amount)||0;
         else if(tx.type==='transfer'){if(tx.fromWalletId===w.id)b-=Number(tx.amount)||0;if(tx.toWalletId===w.id)b+=Number(tx.amount)||0;}
@@ -753,7 +754,7 @@ function buildSettings(){
     <div class="set-sec">Claude AI</div>
     <div class="set-row"><div><div class="set-lbl">Proxy URL</div><div class="set-sub">Cloudflare Worker URL for Claude API</div></div><input class="set-inp" type="url" placeholder="https://..." value="${esc(data.settings.proxyUrl||'')}" onchange="setSetting('proxyUrl',this.value)" style="width:160px;font-size:11px"/></div>
     <div class="set-sec">Finance</div>
-    <div class="set-row"><div><div class="set-lbl">Default Wallet</div><div class="set-sub">Pre-selected for expenses</div></div><select class="set-inp" style="width:auto;padding:7px 8px" onchange="setSetting('defaultWalletId',this.value)">${data.wallets.map(w=>`<option value="${w.id}" ${w.id===data.settings.defaultWalletId?'selected':''}>${w.icon||''} ${esc(w.name)}</option>`).join('')}</select></div>
+    <div class="set-row"><div><div class="set-lbl">Default Wallet</div><div class="set-sub">Pre-selected for expenses</div></div><select class="set-inp" style="width:auto;padding:7px 8px" onchange="setSetting('defaultWalletId',this.value)">${data.wallets.filter(w=>!w.deleted).map(w=>`<option value="${w.id}" ${w.id===data.settings.defaultWalletId?'selected':''}>${w.icon||''} ${esc(w.name)}</option>`).join('')}</select></div>
     <div class="set-sec">Data & Sync</div>
     <div class="set-row"><div><div class="set-lbl">Google Drive Folder</div><div class="set-sub">${ok?'✅ Auto-saving to your folder':'Save data directly to Drive'}</div></div><button class="set-btn ${ok?'ok':''}" onclick="connectFolder()">${ok?'Reconnect':'Connect'}</button></div>
     <div class="set-row"><div><div class="set-lbl">Export Backup</div><div class="set-sub">Download as JSON</div></div><button class="set-btn" onclick="exportData()">Export</button></div>
@@ -763,9 +764,9 @@ function buildSettings(){
 async function setSetting(k,v){data.settings[k]=k==='monthlyIncome'?(parseFloat(v)||0):v;await save();updateHdr();}
 
 // ═══ TRANSACTIONS ═════════════════════════════════════════════════════
-async function addTx(tx){data.transactions.push({id:uid(),...tx});await save();}
-async function delTx(id){data.transactions=data.transactions.filter(t=>t.id!==id);await save();}
-async function updTx(id,fields){const i=data.transactions.findIndex(t=>t.id===id);if(i>=0)data.transactions[i]={...data.transactions[i],...fields};await save();}
+async function addTx(tx){data.transactions.push({id:uid(),updatedAt:Date.now(),...tx});await save();}
+async function delTx(id){const t=data.transactions.find(t=>t.id===id);if(t){t.deleted=true;t.updatedAt=Date.now();}await save();}
+async function updTx(id,fields){const i=data.transactions.findIndex(t=>t.id===id);if(i>=0)data.transactions[i]={...data.transactions[i],...fields,updatedAt:Date.now()};await save();}
 
 // ═══ MODALS ═══════════════════════════════════════════════════════════
 function openM(html){document.getElementById('MD').innerHTML=`<div class="mdh"></div>${html}`;document.getElementById('MO').classList.remove('hidden');}
@@ -852,9 +853,9 @@ async function saveWallet(){
   const displayName=last4?`${name} ••••${last4}`:name;
   const currency=type==='investment'?'PHP':(document.getElementById('wCur')?.value||'PHP');
   const icon=currency==='USD'?'💵':(WICONS[type]||'💳');
-  const w={id:uid(),name:displayName,type,icon,color:selColor,currency,openingBalance:openBal,lastFour:last4||null};
+  const w={id:uid(),name:displayName,type,icon,color:selColor,currency,openingBalance:openBal,lastFour:last4||null,updatedAt:Date.now()};
   data.wallets.push(w);
-  if(type==='investment'&&openBal>0)data.investmentValues.push({walletId:w.id,month:ym(),currentValue:openBal,costBasis:costBasis||openBal});
+  if(type==='investment'&&openBal>0)data.investmentValues.push({id:uid(),walletId:w.id,month:ym(),currentValue:openBal,costBasis:costBasis||openBal,updatedAt:Date.now()});
   if(!data.settings.defaultWalletId&&type==='credit')data.settings.defaultWalletId=w.id;
   await save();closeM();toast(`✅ ${displayName} added!`);renderView();updateHdr();selColor=WCOLS[0];
   _savingWallet=false;
@@ -874,8 +875,8 @@ function openWModal(id){
       <button class="mb primary" onclick="saveAdjBal('${id}')">Save</button>
     </div>`);
 }
-async function saveAdjBal(id){const w=wById(id);if(!w)return;w.openingBalance=parseFloat(document.getElementById('adjBal')?.value)||0;await save();closeM();toast('Balance updated!');renderView();updateHdr();}
-async function doDelWallet(id){if(!confirm('Delete wallet? Transactions stay but lose wallet link.'))return;data.wallets=data.wallets.filter(w=>w.id!==id);await save();closeM();toast('Deleted.');renderView();updateHdr();}
+async function saveAdjBal(id){const w=wById(id);if(!w)return;w.openingBalance=parseFloat(document.getElementById('adjBal')?.value)||0;w.updatedAt=Date.now();await save();closeM();toast('Balance updated!');renderView();updateHdr();}
+async function doDelWallet(id){if(!confirm('Delete wallet? Transactions stay but lose wallet link.'))return;const w=wById(id);if(w){w.deleted=true;w.updatedAt=Date.now();}await save();closeM();toast('Deleted.');renderView();updateHdr();}
 
 // RECONCILE MODAL
 function openReconModal(walletId, loggedBal){
@@ -982,7 +983,7 @@ async function saveInv(id){
   const cv=parseFloat(document.getElementById('invVal')?.value)||0;
   const cb=parseFloat(document.getElementById('invBasis')?.value)||0;
   const m=ym();const ex=data.investmentValues.find(v=>v.walletId===id&&v.month===m);
-  if(ex){ex.currentValue=cv;ex.costBasis=cb;}else data.investmentValues.push({walletId:id,month:m,currentValue:cv,costBasis:cb});
+  if(ex){ex.currentValue=cv;ex.costBasis=cb;ex.updatedAt=Date.now();}else data.investmentValues.push({id:uid(),walletId:id,month:m,currentValue:cv,costBasis:cb,updatedAt:Date.now()});
   await save();closeM();toast('✅ Investment updated!');renderView();updateHdr();
 }
 
@@ -1009,7 +1010,7 @@ async function saveGoal(){
   if(_savingGoal)return;_savingGoal=true;
   const title=document.getElementById('gTitle')?.value?.trim();if(!title){_savingGoal=false;toast('Enter a title.');return;}
   const body=document.getElementById('gBody')?.value?.trim()||'';
-  const goal={id:uid(),title,body,active:true,createdAt:today()};
+  const goal={id:uid(),title,body,active:true,createdAt:today(),updatedAt:Date.now()};
   data.goals.push(goal);
   await save();closeM();toast('✅ Goal added!');renderView();
   _savingGoal=false;
@@ -1032,12 +1033,13 @@ async function updateGoal(id){
   const title=document.getElementById('gTitleEdit')?.value?.trim();if(!title)return toast('Enter a title.');
   g.title=title;
   g.body=document.getElementById('gBodyEdit')?.value?.trim()||'';
+  g.updatedAt=Date.now();
   await save();closeM();toast('Goal updated!');renderView();updateHdr();
 }
 
 async function archiveGoal(id){
   const g=data.goals.find(g=>g.id===id);if(!g)return;
-  g.active=false;await save();closeM();toast('Goal archived.');renderView();
+  g.active=false;g.updatedAt=Date.now();await save();closeM();toast('Goal archived.');renderView();
 }
 
 // ═══ UTILS ════════════════════════════════════════════════════════════
@@ -1062,11 +1064,24 @@ async function migrateGoals(){
   if(migrated)await save();
 }
 
+// ═══ DATA MIGRATION ════════════════════════════════════════════════════
+async function migrateData(){
+  let changed=false;const now=Date.now();
+  const cutoff=now-(90*24*60*60*1000);
+  data.transactions.forEach(t=>{if(!t.updatedAt){t.updatedAt=Date.parse(t.date)||now;changed=true;}});
+  data.wallets.forEach(w=>{if(!w.updatedAt){w.updatedAt=now;changed=true;}});
+  data.goals.forEach(g=>{if(!g.updatedAt){g.updatedAt=Date.parse(g.createdAt)||now;changed=true;}});
+  data.investmentValues.forEach(v=>{if(!v.id){v.id=uid();changed=true;}if(!v.updatedAt){v.updatedAt=now;changed=true;}});
+  ['transactions','wallets','goals','investmentValues'].forEach(k=>{const before=data[k].length;data[k]=data[k].filter(x=>!x.deleted||(x.updatedAt||0)>cutoff);if(data[k].length!==before)changed=true;});
+  if(changed)await save();
+}
+
 // ═══ INIT ════════════════════════════════════════════════════════════
 async function init(){
   loadLocal();
   await tryRestoreFolder();
   await migrateGoals();
+  await migrateData();
   if(!data.settings.usdRateDate||data.settings.usdRateDate<today())fetchRate();
   // Auto-refresh insights once per day
   if(data.settings.proxyUrl&&data.insights?.lastUpdated){
