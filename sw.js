@@ -1,8 +1,11 @@
-const CACHE = '₱tracker-v10';
+const CACHE = '₱tracker-v12';
 // Only cache truly static assets — never index.html (it updates too often)
 const ASSETS = [
   './manifest.json',
-  './icon.svg',
+  './icon/icon-192.png',
+  './icon/icon-512.png',
+  './icon/icon-maskable-512.png',
+  './icon/apple-touch-icon-180.png',
   'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js'
 ];
 
