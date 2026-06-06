@@ -1,4 +1,4 @@
-const CACHE = '₱tracker-v12';
+const CACHE = '₱tracker-v13';
 // Only cache truly static assets — never index.html (it updates too often)
 const ASSETS = [
   './manifest.json',

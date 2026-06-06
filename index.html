@@ -9,9 +9,9 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="₱ Tracker">
-  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="apple-touch-icon" href="icon/apple-touch-icon-180.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="icon/icon-512.png">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     :root {
       --bg:#0f0e17; --surface:#1c1b2e; --surface2:#252438; --border:#312f4f;
@@ -310,13 +310,11 @@ function loadLocal(){try{const r=localStorage.getItem('pt4');if(r){data={...clon
 async function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open('ptDB',3);r.onupgradeneeded=e=>{try{e.target.result.createObjectStore('kv');}catch(x){}};r.onsuccess=e=>res(e.target.result);r.onerror=rej;})}
 async function dbGet(k){const db=await openDB();return new Promise((res,rej)=>{const r=db.transaction('kv','readonly').objectStore('kv').get(k);r.onsuccess=e=>res(e.target.result);r.onerror=rej;})}
 async function dbSet(k,v){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction('kv','readwrite');tx.objectStore('kv').put(v,k);tx.oncomplete=res;tx.onerror=rej;})}
-const GDRIVE_CLIENT_ID='428293773028-hdmpetjd007bahi6kmm4ku61j8gss3mf.apps.googleusercontent.com';
-const GDRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
-let gdriveRefreshTimer=null;
-function scheduleTokenRefresh(expiresInMs){if(gdriveRefreshTimer)clearTimeout(gdriveRefreshTimer);const refreshIn=Math.max(expiresInMs-5*60*1000,30000);gdriveRefreshTimer=setTimeout(silentTokenRefresh,refreshIn);}
-function trySilentAuth(){return new Promise(resolve=>{if(!window.google?.accounts?.oauth2||!gdriveFileId){resolve(false);return;}const client=google.accounts.oauth2.initTokenClient({client_id:GDRIVE_CLIENT_ID,scope:GDRIVE_SCOPE,callback:async r=>{if(r.error||!r.access_token){resolve(false);return;}gdriveToken=r.access_token;await dbSet('gdriveToken',r.access_token);const expiry=Date.now()+((r.expires_in||3599)*1000);await dbSet('gdriveExpiry',expiry);scheduleTokenRefresh((r.expires_in||3599)*1000);await loadFromFolder();updateHdr();renderView();resolve(true);},error_callback:()=>resolve(false)});client.requestAccessToken({prompt:''});});}
-function silentTokenRefresh(){trySilentAuth();}
-async function maybeRefreshToken(){if(!gdriveFileId)return;const expiry=await dbGet('gdriveExpiry');if(!gdriveToken||!expiry||Date.now()>expiry-60000)trySilentAuth();}
+const WORKER_BASE='https://claude-proxy.raffy-tanpho.workers.dev';
+let gdriveSession=null,gdriveRefreshTimer=null;
+function scheduleTokenRefresh(expiresInMs){if(gdriveRefreshTimer)clearTimeout(gdriveRefreshTimer);const refreshIn=Math.max(expiresInMs-5*60*1000,30000);gdriveRefreshTimer=setTimeout(()=>{getDriveToken();},refreshIn);}
+async function getDriveToken(){if(!gdriveSession)gdriveSession=await dbGet('driveSession');if(!gdriveSession)return false;try{const r=await fetch(WORKER_BASE+'/drive/token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:gdriveSession})});if(!r.ok){if(r.status===401){gdriveSession=null;gdriveToken=null;await dbSet('driveSession',null);}return false;}const j=await r.json();if(!j.access_token)return false;gdriveToken=j.access_token;const ms=(j.expires_in||3599)*1000;await dbSet('gdriveExpiry',Date.now()+ms);scheduleTokenRefresh(ms);return true;}catch(e){return false;}}
+async function maybeRefreshToken(){if(!gdriveSession&&!(gdriveSession=await dbGet('driveSession')))return;const expiry=await dbGet('gdriveExpiry');if(!gdriveToken||!expiry||Date.now()>expiry-60000){const ok=await getDriveToken();if(ok)await loadFromFolder();}}
 async function save(){saveLocal();if(!gdriveToken||!gdriveFileId)return;try{await fetch(`https://www.googleapis.com/upload/drive/v3/files/${gdriveFileId}?uploadType=media`,{method:'PATCH',headers:{'Authorization':'Bearer '+gdriveToken,'Content-Type':'application/json'},body:JSON.stringify(data,null,2)});}catch(e){console.error('Drive save failed',e);}}
 function mergeArr(remote,local){const map=new Map();let changed=false;const noIdSeen=new Set();const noIdArr=[];function addNoId(x){const k=JSON.stringify(x);if(!noIdSeen.has(k)){noIdSeen.add(k);noIdArr.push(x);}}(remote||[]).forEach(x=>{if(x.id)map.set(x.id,x);else addNoId(x);});(local||[]).forEach(x=>{if(!x.id){addNoId(x);changed=true;return;}const r=map.get(x.id);if(!r||(x.updatedAt||0)>(r.updatedAt||0)){map.set(x.id,x);changed=true;}});return{arr:[...Array.from(map.values()),...noIdArr],changed};}
 async function loadFromFolder(){if(!gdriveToken||!gdriveFileId){loadLocal();return false;}try{const local=clone(data);const r=await fetch(`https://www.googleapis.com/drive/v3/files/${gdriveFileId}?alt=media`,{headers:{'Authorization':'Bearer '+gdriveToken}});if(!r.ok)throw 0;const j=await r.json();if(!j.wallets)throw 0;data={...clone(DEF),...j};let hadLocalChanges=false;['wallets','transactions','investmentValues','goals'].forEach(k=>{const{arr,changed}=mergeArr(j[k],local[k]);data[k]=arr;if(changed)hadLocalChanges=true;});dedupeData();saveLocal();if(hadLocalChanges){setTimeout(async()=>{await save();toast('✅ Offline entries synced to Drive!');},300);}return true;}catch(e){loadLocal();return false;}}
@@ -329,8 +327,9 @@ async function findOrCreateDriveFile(){
   const q=encodeURIComponent("name='tracker-data.json' and 'root' in parents and trashed=false");const r=await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive&fields=files(id)&orderBy=modifiedTime+desc`,{headers:{'Authorization':'Bearer '+gdriveToken}});const j=await r.json();if(j.files&&j.files.length>0){gdriveFileId=j.files[0].id;await dbSet('gdriveFileId',gdriveFileId);return;}
   // No file found — create a fresh one in root
   const meta={name:'tracker-data.json',mimeType:'application/json'};const form=new FormData();form.append('metadata',new Blob([JSON.stringify(meta)],{type:'application/json'}));form.append('file',new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const cr=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{method:'POST',headers:{'Authorization':'Bearer '+gdriveToken},body:form});const cj=await cr.json();gdriveFileId=cj.id;await dbSet('gdriveFileId',gdriveFileId);}
-async function connectFolder(){if(!window.google?.accounts?.oauth2){toast('Google sign-in not loaded. Try refreshing.');return;}const client=google.accounts.oauth2.initTokenClient({client_id:GDRIVE_CLIENT_ID,scope:GDRIVE_SCOPE,callback:async r=>{if(r.error){toast('Could not connect to Google Drive.');return;}gdriveToken=r.access_token;await dbSet('gdriveToken',r.access_token);const expiry=Date.now()+((r.expires_in||3599)*1000);await dbSet('gdriveExpiry',expiry);scheduleTokenRefresh((r.expires_in||3599)*1000);await findOrCreateDriveFile();const loaded=await loadFromFolder();if(loaded)toast('✅ Connected! Data loaded from Drive.');else{await save();toast('✅ Connected to Google Drive!');}renderView();updateHdr();}});client.requestAccessToken({prompt:''});}
-async function tryRestoreFolder(){try{const token=await dbGet('gdriveToken');const expiry=await dbGet('gdriveExpiry');const fileId=await dbGet('gdriveFileId');if(!fileId)return;gdriveFileId=fileId;if(token&&expiry&&Date.now()<expiry-60000){gdriveToken=token;scheduleTokenRefresh(expiry-Date.now());await loadFromFolder();}else{trySilentAuth();}}catch(e){}}
+function connectFolder(){toast('Redirecting to Google…');location.href=WORKER_BASE+'/drive/start';}
+async function enterDriveCode(){const c=(prompt('Paste the setup code shown on the connect page:')||'').trim();if(!c)return;gdriveSession=c;await dbSet('driveSession',c);const ok=await getDriveToken();if(ok){if(!gdriveFileId)await findOrCreateDriveFile();await loadFromFolder();toast('✅ Connected to Google Drive!');}else{toast('That code did not work — tap Reconnect to try again.');}updateHdr();renderView();}
+async function tryRestoreFolder(){try{const m=location.hash.match(/drive_session=([^&]+)/);let fresh=false;if(m){gdriveSession=decodeURIComponent(m[1]);await dbSet('driveSession',gdriveSession);history.replaceState(null,'',location.pathname+location.search);fresh=true;}gdriveSession=gdriveSession||await dbGet('driveSession');const fileId=await dbGet('gdriveFileId');if(fileId)gdriveFileId=fileId;if(!gdriveSession)return;const ok=await getDriveToken();if(ok){if(!gdriveFileId)await findOrCreateDriveFile();await loadFromFolder();if(fresh)toast('✅ Connected! Data loaded from Drive.');}}catch(e){}}
 function exportData(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.download=`tracker-${today()}.json`;a.click();toast('Exported!');}
 function importData(){const inp=document.createElement('input');inp.type='file';inp.accept='.json';inp.onchange=async e=>{const file=e.target.files[0];if(!file)return;try{const imp=JSON.parse(await file.text());if(!imp.wallets)throw 0;data={...clone(DEF),...imp};await save();toast('✅ Imported!');renderView();updateHdr();}catch(e){toast('Invalid file.');}};inp.click();}
 
@@ -627,7 +626,7 @@ function buildStats(){
     ${spikes.length?`<div class="card"><div class="card-title">⚠️ Unusual Spending</div>${spikes.map(s=>`<div class="spike-item"><div><div style="font-weight:700">${catById(s.catId).icon} ${catById(s.catId).name}</div><div style="font-size:11px;color:var(--muted)">${fmtPHP(Math.round(s.avg))} avg → ${fmtPHP(s.current)}</div></div><span class="spike-tag">+${s.pct}%</span></div>`).join('')}</div>`:''}
     <div class="gap"></div>`;
 }
-function chgSM(d){const[y,m]=statsMonth.split('-').map(Number);statsMonth=new Date(y,m-1+d,1).toISOString().slice(0,7);destroyCharts();renderView();updateHdr();}
+function chgSM(d){const[y,m]=statsMonth.split('-').map(Number);const dt=new Date(y,m-1+d,1);statsMonth=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');destroyCharts();renderView();updateHdr();}
 function detectSpikes(month){
   const cur={};data.transactions.filter(t=>!t.deleted&&t.type==='expense'&&t.date.slice(0,7)===month).forEach(t=>{cur[t.cat]=(cur[t.cat]||0)+(Number(t.amountPHP)||0);});
   const spikes=[];
@@ -759,6 +758,8 @@ function buildSettings(){
     <div class="set-row"><div><div class="set-lbl">Google Drive Folder</div><div class="set-sub">${ok?'✅ Auto-saving to your folder':'Save data directly to Drive'}</div></div><button class="set-btn ${ok?'ok':''}" onclick="connectFolder()">${ok?'Reconnect':'Connect'}</button></div>
     <div class="set-row"><div><div class="set-lbl">Export Backup</div><div class="set-sub">Download as JSON</div></div><button class="set-btn" onclick="exportData()">Export</button></div>
     <div class="set-row"><div><div class="set-lbl">Import Backup</div><div class="set-sub">Restore from JSON</div></div><button class="set-btn" onclick="importData()">Import</button></div>
+    <div class="set-sec">About</div>
+    <div class="set-row"><div><div class="set-lbl">Version</div><div class="set-sub">2026.06.06-b1 — Stats nav fix + Drive reconnect</div></div></div>
     <div class="gap"></div>`;
 }
 async function setSetting(k,v){data.settings[k]=k==='monthlyIncome'?(parseFloat(v)||0):v;await save();updateHdr();}
@@ -1098,9 +1099,4 @@ window.addEventListener('online',()=>maybeRefreshToken());
 
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('./sw.js').catch(()=>{});
-  });
-}
-</script>
-</body>
-</html>
+    navigator.serviceWorker.register('./sw.js').cat
