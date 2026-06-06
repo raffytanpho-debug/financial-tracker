@@ -755,11 +755,11 @@ function buildSettings(){
     <div class="set-sec">Finance</div>
     <div class="set-row"><div><div class="set-lbl">Default Wallet</div><div class="set-sub">Pre-selected for expenses</div></div><select class="set-inp" style="width:auto;padding:7px 8px" onchange="setSetting('defaultWalletId',this.value)">${data.wallets.filter(w=>!w.deleted).map(w=>`<option value="${w.id}" ${w.id===data.settings.defaultWalletId?'selected':''}>${w.icon||''} ${esc(w.name)}</option>`).join('')}</select></div>
     <div class="set-sec">Data & Sync</div>
-    <div class="set-row"><div><div class="set-lbl">Google Drive Folder</div><div class="set-sub">${ok?'✅ Auto-saving to your folder':'Save data directly to Drive'}</div></div><button class="set-btn ${ok?'ok':''}" onclick="connectFolder()">${ok?'Reconnect':'Connect'}</button></div>
+    <div class="set-row"><div><div class="set-lbl">Google Drive Folder</div><div class="set-sub">${ok?'✅ Auto-saving to your folder':'Save data directly to Drive'}</div><div class="set-sub" onclick="enterDriveCode()" style="cursor:pointer;color:#60a5fa;font-size:11px;margin-top:4px">Have a setup code? Enter it</div></div><button class="set-btn ${ok?'ok':''}" onclick="connectFolder()">${ok?'Reconnect':'Connect'}</button></div>
     <div class="set-row"><div><div class="set-lbl">Export Backup</div><div class="set-sub">Download as JSON</div></div><button class="set-btn" onclick="exportData()">Export</button></div>
     <div class="set-row"><div><div class="set-lbl">Import Backup</div><div class="set-sub">Restore from JSON</div></div><button class="set-btn" onclick="importData()">Import</button></div>
     <div class="set-sec">About</div>
-    <div class="set-row"><div><div class="set-lbl">Version</div><div class="set-sub">2026.06.06-b1 — Stats nav fix + Drive reconnect</div></div></div>
+    <div class="set-row"><div><div class="set-lbl">Version</div><div class="set-sub">2026.06.06-b2 — Stats nav fix + Drive reconnect + iOS setup-code</div></div></div>
     <div class="gap"></div>`;
 }
 async function setSetting(k,v){data.settings[k]=k==='monthlyIncome'?(parseFloat(v)||0):v;await save();updateHdr();}
