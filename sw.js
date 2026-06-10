@@ -1,5 +1,7 @@
-const CACHE = '₱tracker-v13';
-// Only cache truly static assets — never index.html (it updates too often)
+const CACHE = '₱tracker-v14';
+// Static assets cached long-term. index.html is intentionally NOT precached
+// here; instead the fetch handler keeps a fresh copy on every successful load
+// (network-first) so online users never get stale code.
 const ASSETS = [
   './manifest.json',
   './icon/icon-192.png',
@@ -24,22 +26,39 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  const url = e.request.url;
-  // Always network-first for HTML documents and API calls — never serve stale app code
-  if (e.request.destination === 'document' ||
-      url.includes('open.er-api.com') || url.includes('workers.dev') ||
-      url.includes('accounts.google.com') || url.includes('googleapis.com')) {
+  const req = e.request;
+  const url = req.url;
+
+  // App shell (HTML documents): network-first so online users always get the
+  // freshest app code, but cache each successful response and fall back to that
+  // cached shell when the network fails — instead of letting the browser show a
+  // dead error page. This is the fix for "the app won't load" on flaky networks.
+  if (req.mode === 'navigate' || req.destination === 'document') {
     e.respondWith(
-      fetch(e.request).catch(() => caches.match(e.request))
+      fetch(req).then(res => {
+        const clone = res.clone();
+        e.waitUntil(caches.open(CACHE).then(c => c.put('./index.html', clone)));
+        return res;
+      }).catch(() =>
+        caches.match('./index.html').then(c => c || caches.match('./'))
+      )
     );
     return;
   }
+
+  // API / auth calls: always go to the network, never serve stale data.
+  if (url.includes('open.er-api.com') || url.includes('workers.dev') ||
+      url.includes('accounts.google.com') || url.includes('googleapis.com')) {
+    e.respondWith(fetch(req).catch(() => caches.match(req)));
+    return;
+  }
+
   // Cache-first for static assets (Chart.js, icons, manifest)
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request).then(res => {
+    caches.match(req).then(cached => cached || fetch(req).then(res => {
       if (res.ok) {
         const clone = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, clone));
+        e.waitUntil(caches.open(CACHE).then(c => c.put(req, clone)));
       }
       return res;
     }))
