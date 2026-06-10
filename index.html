@@ -124,6 +124,13 @@
     .spike-item:last-child{border-bottom:none}
     .spike-tag{font-size:11px;background:var(--red);color:#fff;padding:2px 7px;border-radius:20px;font-weight:700}
 
+    /* TIERS & PROJECTS */
+    .tier-hdr{font-size:11px;text-transform:uppercase;letter-spacing:.8px;font-weight:700;margin:13px 2px 7px;display:flex;align-items:baseline;gap:7px}
+    .tier-hdr .tier-sub{color:var(--muted);font-weight:600;text-transform:none;letter-spacing:0;font-size:10px}
+    .tier-chip{font-size:9px;font-weight:700;padding:1px 6px;border-radius:9px;vertical-align:1px;text-transform:uppercase;letter-spacing:.4px}
+    .proj-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
+    .proj-row:last-child{border-bottom:none}
+
     /* ADVISOR */
     .goal-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);padding:13px;margin-bottom:8px;cursor:pointer;transition:opacity .15s}
     .goal-card:active{opacity:.75}
@@ -241,26 +248,63 @@
 
 <script>
 // ═══ CONSTANTS ═══════════════════════════════════════════════════════
-const CATS=[
-  {id:'food',    name:'Food & Drink',      icon:'🍽️',color:'#ef4444',kw:['coffee','lunch','dinner','breakfast','cafe','restaurant','snacks','food','meal','eat','merienda','milk tea','boba','pizza','burger','mcdo','jollibee','kfc','grocery','groceries','carinderia','kape','dessert','shawarma','bbq','ulam']},
-  {id:'transport',name:'Transport',        icon:'🚗',color:'#3b82f6',kw:['grab','uber','taxi','jeep','jeepney','mrt','lrt','bus','gas','parking','fuel','angkas','tricycle','fare','toll','commute','gasoline']},
-  {id:'wellness',name:'Wellness',          icon:'💆',color:'#8b5cf6',kw:['massage','doctor','medicine','pharmacy','gym','health','spa','vitamins','dental','checkup','hospital','clinic','haircut','salon','barbershop','facial','derma','botox']},
-  {id:'shopping',name:'Shopping',          icon:'🛍️',color:'#06b6d4',kw:['clothes','shoes','mall','lazada','shopee','amazon','clothing','shirt','pants','dress','bag','accessories','makeup']},
-  {id:'bills',   name:'Bills & Utilities', icon:'📱',color:'#f59e0b',kw:['electric','water','internet','phone','load','rent','wifi','pldt','meralco','globe','smart','converge','sky','cable','dues','condo','hoa']},
-  {id:'subs',    name:'Subscriptions',     icon:'🎬',color:'#ec4899',kw:['netflix','spotify','disney','youtube','adobe','canva','claude','chatgpt','apple','google','microsoft','office','subscription','streaming','hbo','prime']},
-  {id:'house',   name:'House / Build',     icon:'🏠',color:'#10b981',kw:['house','construction','materials','hardware','cement','tiles','labor','contractor','furniture','appliance','plumbing','electrical','paint','lumber','steel','gravel','sand','hollow blocks','roofing','architect','engineer','renovation','repair','flooring','lot','land']},
-  {id:'entertain',name:'Entertainment',   icon:'🎭',color:'#f97316',kw:['movie','cinema','concert','games','bar','drinks','travel','hotel','airbnb','vacation','flight','ticket','steam','playstation']},
-  {id:'adjust',  name:'Adjustment',        icon:'⚖️',color:'#6b7280',kw:[]},
-  {id:'other',   name:'Other',             icon:'📦',color:'#6b7280',kw:[]}
+// Tiers: tier 1 = what you can do about it. Spec: FTA 05_CATEGORIZATION_RULES.md
+const TIERS=[
+  {id:'discretionary',label:'Discretionary',color:'#ef4565',blurb:'Optional, first to cut'},
+  {id:'variable',     label:'Variable',     color:'#3b82f6',blurb:'Necessary, you control the amount'},
+  {id:'fixed',        label:'Fixed',        color:'#f59e0b',blurb:'Locked-in, recurring'},
+  {id:'income',       label:'Income',       color:'#2cb67d',blurb:'Money in'},
+  {id:'flow',         label:'Flow',         color:'#4cc9f0',blurb:'Money moving, not spending'},
+  {id:'adjustment',   label:'Adjustment',   color:'#6b7280',blurb:'Reconciliation plugs'}
 ];
-const ITYPES=[{id:'salary',label:'Salary',icon:'💼'},{id:'freelance',label:'Freelance / Client',icon:'💻'},{id:'returns',label:'Investment Returns',icon:'📈'},{id:'other',label:'Other',icon:'💰'}];
+const SPEND_TIERS=['fixed','variable','discretionary'];
+const CATS=[
+  // Discretionary
+  {id:'food',         tier:'discretionary',name:'Food & Drink',  icon:'🍽️',color:'#ef4444',kw:['lunch','dinner','breakfast','coffee','cafe','restaurant','snacks','food','meal','merienda','milk tea','boba','pizza','burger','mcdo','jollibee','kfc','starbucks','heybo','deli by chele','fruitas','sichu','mendokoro','cibo','nanyang','eric kayser','army navy','carinderia','dessert','shawarma','bbq','ulam','drinks']},
+  {id:'shopping',     tier:'discretionary',name:'Shopping',      icon:'🛍️',color:'#06b6d4',kw:['shopee','lazada','clothes','shoes','mall','computer','gift','amazon','clothing','shirt','pants','dress','bag','accessories','makeup','andrea']},
+  {id:'entertainment',tier:'discretionary',name:'Entertainment', icon:'🎭',color:'#f97316',kw:['movie','cinema','concert','steam','game','games','jollyland','bar','playstation']},
+  {id:'travel',       tier:'discretionary',name:'Travel',        icon:'✈️',color:'#a78bfa',kw:['travel','korea','hotel','flight','airbnb','vacation','airline']},
+  {id:'homebuild',    tier:'discretionary',name:'Home Build',    icon:'🏗️',color:'#10b981',proj:'southbay',kw:['arthur emmanuel tan','architect','carla','contractor','construction']},
+  // Variable
+  {id:'groceries',    tier:'variable',     name:'Groceries',     icon:'🛒',color:'#84cc16',kw:['grocery','groceries','supermarket','merkado','robinsons selections','landers']},
+  {id:'transport',    tier:'variable',     name:'Transport',     icon:'🚗',color:'#3b82f6',kw:['grab','petron','shell','gas','gasoline','taxi','angkas','lalamove','toll','parking','jeep','jeepney','mrt','lrt','bus','fuel','tricycle','fare','commute','uber']},
+  {id:'health',       tier:'variable',     name:'Health',        icon:'💊',color:'#8b5cf6',kw:['barber','salon','watsons','pharmacy','gym','massage','beauty','haircut','be well','clinic','doctor','medicine','vitamins','dental','checkup','hospital','spa','derma','facial']},
+  {id:'others',       tier:'variable',     name:'Others',        icon:'📦',color:'#9ca3af',kw:[]},
+  // Fixed (no catch-all by design — if it's Fixed, you can name it)
+  {id:'bills',        tier:'fixed',        name:'Bills & Utilities',icon:'📱',color:'#f59e0b',kw:['bills payment','ewop','globe','monthly fee','internet','meralco','phone','myoffice','electric','water','load','wifi','pldt','smart','converge','rent','cable']},
+  {id:'subs',         tier:'fixed',        name:'Subscriptions', icon:'🎬',color:'#ec4899',kw:['spotify','youtube','apple subscription','netflix','claude','membership','disney','adobe','canva','chatgpt','hbo','prime','subscription','streaming']},
+  {id:'dues',         tier:'fixed',        name:'HOA Dues',      icon:'🏘️',color:'#eab308',kw:['southbay homeowners','homeowners','hoa','dues']},
+  {id:'education',    tier:'fixed',        name:'Education',     icon:'🎓',color:'#14b8a6',kw:['mio school','tuition','school']},
+  // Income
+  {id:'salary',       tier:'income',       name:'Salary',        icon:'💼',color:'#2cb67d',kw:['payroll','salary']},
+  {id:'returns',      tier:'income',       name:'Investment Returns',icon:'📈',color:'#10b981',kw:['investment return']},
+  {id:'interest',     tier:'income',       name:'Interest',      icon:'🏦',color:'#34d399',kw:['interest']},
+  {id:'cashback',     tier:'income',       name:'Cashback',      icon:'🪙',color:'#a3e635',kw:['cashback','rebate']},
+  {id:'refund',       tier:'income',       name:'Refund',        icon:'↩️',color:'#6ee7b7',kw:['refund']},
+  {id:'incother',     tier:'income',       name:'Other Income',  icon:'💰',color:'#86efac',kw:[]},
+  // Flow
+  {id:'transfer',     tier:'flow',         name:'Transfer',      icon:'↔️',color:'#4cc9f0',kw:['wallet adjustment','cash in','manulife','instapay','transfer']},
+  {id:'ccpayment',    tier:'flow',         name:'CC Payment',    icon:'💳',color:'#38bdf8',kw:['cc payment','credit card payment','card payment','online payment']},
+  {id:'reimburse',    tier:'flow',         name:'Reimbursement', icon:'🤝',color:'#7dd3fc',kw:['reimburse','reimbursement','reimbursed']},
+  {id:'tax',          tier:'flow',         name:'Tax',           icon:'🧾',color:'#60a5fa',kw:['tax','bir']},
+  // Adjustment (recon plugs — never spending or income)
+  {id:'writeoff',     tier:'adjustment',   name:'Write-off',     icon:'⚖️',color:'#6b7280',kw:['recon write-off','write-off','write off']},
+  {id:'writeon',      tier:'adjustment',   name:'Write-on',      icon:'⚖️',color:'#9ca3af',kw:['recon write-on','write-on','write on','income adjustment']}
+];
+// Keyword detection order per the rules file (first match wins). Display order above is by tier instead.
+const DETECT_ORDER=['writeon','writeoff','homebuild','dues','returns','interest','cashback','salary','reimburse','transfer','ccpayment','tax','subs','bills','transport','health','groceries','education','travel','entertainment','shopping','food'];
+// Back-compat: old flat-category ids and income types map onto the new model at read time.
+const LEGACY_CATS={wellness:'health',house:'homebuild',entertain:'entertainment',other:'others',adjust:'writeoff'};
+const LEGACY_ITYPES={freelance:'incother',other:'incother'};
+const ITYPES=CATS.filter(c=>c.tier==='income').map(c=>({id:c.id,label:c.name,icon:c.icon}));
 const WICONS={credit:'💳',bank:'🏦',ewallet:'📱',usd:'💵',investment:'📈'};
 const WCOLS=['#7c5cbf','#ef4565','#2cb67d','#4cc9f0','#f59e0b','#ec4899','#3b82f6','#10b981','#f97316','#a78bfa'];
 const DEF={version:4,settings:{usdRate:56.5,usdRateDate:null,usdRateManual:null,defaultWalletId:null,proxyUrl:'',apiKey:'',autoRefresh:true},wallets:[],transactions:[],investmentValues:[],goals:[],insights:{text:null,lastUpdated:null}};
 
 // ═══ STATE ═══════════════════════════════════════════════════════════
-let data=clone(DEF),view='log',logType='expense',statsMonth=ym(),pendingCat='other',selColor=WCOLS[0],gdriveToken=null,gdriveFileId=null,charts={},reconImages=[],genInProgress=false;
+let data=clone(DEF),view='log',logType='expense',statsMonth=ym(),pendingCat='others',selColor=WCOLS[0],gdriveToken=null,gdriveFileId=null,charts={},reconImages=[],genInProgress=false;
 let balHidden=localStorage.getItem('balHidden')==='1';
+let statsProjIncl=localStorage.getItem('statsProjIncl')==='1';
 
 // ═══ HELPERS ═════════════════════════════════════════════════════════
 function clone(o){return JSON.parse(JSON.stringify(o))}
@@ -275,10 +319,28 @@ function fmtPHP(n){if(n===null||n===undefined)return'—';const a=Math.abs(n);co
 function fmtUSD(n){return'$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
 function fmtDate(d){const t=today();if(d===t)return'Today';if(d===prevDay(t))return'Yesterday';return new Date(d+'T12:00:00').toLocaleDateString('en-PH',{weekday:'short',month:'short',day:'numeric'})}
 function monthLabel(m){const[y,mo]=m.split('-');return new Date(y,mo-1).toLocaleDateString('en-PH',{month:'long',year:'numeric'})}
-function catById(id){return CATS.find(c=>c.id===id)||CATS[CATS.length-1]}
+function canonCat(id){return LEGACY_CATS[id]||id||'others'}
+function catById(id){const cid=canonCat(id);return CATS.find(c=>c.id===cid)||CATS.find(c=>c.id==='others')}
+function tierById(id){return TIERS.find(t=>t.id===id)||TIERS.find(t=>t.id==='variable')}
+function catTier(catId){return catById(catId).tier}
+// tier resolution: explicit override > stored tier > tx type > derived from cat. Old rows never crash.
+function tierOf(tx){
+  if(tx.tierOverride)return tx.tierOverride;
+  if(tx.tier)return tx.tier;
+  if(tx.type==='income')return'income';
+  if(tx.type==='transfer')return'flow';
+  if(tx.type==='adjustment')return'adjustment';
+  return catTier(tx.cat);
+}
+function isSpend(tx){return tx.type==='expense'&&SPEND_TIERS.includes(tierOf(tx))}
+function projOf(tx){return tx.project||(catById(tx.cat).proj&&tx.type==='expense'?catById(tx.cat).proj:null)}
+function projectNames(){const s=new Set(['southbay']);data.transactions.forEach(t=>{if(!t.deleted&&t.project)s.add(t.project);});return[...s]}
+// income rows: prefer the cat if it's an income detail cat; else map the legacy incomeType.
+function incCatOf(tx){const cid=canonCat(tx.cat);if(catById(cid).tier==='income')return catById(cid);const it=LEGACY_ITYPES[tx.incomeType]||tx.incomeType||'incother';const c=CATS.find(c=>c.id===it);return c&&c.tier==='income'?c:CATS.find(c=>c.id==='incother')}
+function kwHit(lo,k){if(k.includes(' '))return lo.includes(k);return new RegExp('\\b'+k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b').test(lo)}
 function wById(id){return data.wallets.find(w=>w.id===id)}
 function defW(){if(data.settings.defaultWalletId){const w=wById(data.settings.defaultWalletId);if(w&&!w.deleted)return w;}return data.wallets.find(w=>!w.deleted)||null}
-function detectCat(text){const lo=text.toLowerCase();for(const c of CATS){if(c.kw.some(k=>lo.includes(k)))return c.id;}return'other'}
+function detectCat(text,type){const lo=(text||'').toLowerCase();for(const id of DETECT_ORDER){const c=CATS.find(c=>c.id===id);if(c&&c.kw.some(k=>kwHit(lo,k)))return c.id;}return type==='income'?'incother':'others'}
 function parseInp(raw){const text=raw.trim();const m=text.match(/(\d[\d,]*(?:\.\d+)?)/);let amount=null,desc=text;if(m){amount=parseFloat(m[1].replace(',',''));desc=text.replace(m[0],'').replace(/\s+/g,' ').trim()||text;}return{desc:desc||text,amount,catId:detectCat(text)}}
 
 // ═══ BALANCE ═════════════════════════════════════════════════════════
@@ -299,8 +361,10 @@ function computeBal(wid){
 function latestInv(wid){return data.investmentValues.filter(v=>v.walletId===wid).sort((a,b)=>b.month.localeCompare(a.month))[0]||null}
 function wPHP(wid){const w=wById(wid);if(!w)return 0;if(w.type==='investment'){const inv=latestInv(wid);return inv?toPHP(inv.currentValue,w.currency):toPHP(computeBal(wid),w.currency);}return toPHP(computeBal(wid),w.currency)}
 function netWorth(){return data.wallets.filter(w=>!w.deleted).reduce((s,w)=>s+wPHP(w.id),0)}
-function mSpend(m){return data.transactions.filter(t=>!t.deleted&&t.type==='expense'&&t.date.slice(0,7)===m).reduce((s,t)=>s+(Number(t.amountPHP)||0),0)}
-function mIncome(m){return data.transactions.filter(t=>!t.deleted&&t.type==='income'&&t.date.slice(0,7)===m).reduce((s,t)=>s+(Number(t.amountPHP)||0),0)}
+// "Spend" = expense-type txns in a spending tier (Fixed/Variable/Discretionary). Flow & Adjustment never count.
+function mSpend(m){return data.transactions.filter(t=>!t.deleted&&t.date.slice(0,7)===m&&isSpend(t)).reduce((s,t)=>s+(Number(t.amountPHP)||0),0)}
+// "Income" = income-type txns in the income tier. CC-payment/transfer-in legs stored as income-type are Flow, not income.
+function mIncome(m){return data.transactions.filter(t=>!t.deleted&&t.type==='income'&&t.date.slice(0,7)===m&&tierOf(t)==='income').reduce((s,t)=>s+(Number(t.amountPHP)||0),0)}
 
 
 // ═══ STORAGE ═════════════════════════════════════════════════════════
@@ -485,6 +549,8 @@ function buildLog(){
             <span id="catIco">${catById(pendingCat).icon}</span>
             <span id="catNm">${catById(pendingCat).name}</span>
           </span>
+          <input class="mamt" id="projInp" list="projList" placeholder="Project" style="width:92px"/>
+          <datalist id="projList">${projectNames().map(p=>`<option value="${esc(p)}">`).join('')}</datalist>
           <input class="mamt" id="logDate" type="date" value="${today()}" style="width:140px"/>
         </div>`:logType==='income'?`
         <div class="log-meta">
@@ -518,18 +584,19 @@ function buildTxRow(tx){
   if(tx.type==='adjustment'){
     return`<div class="tx" style="border-left-color:#6b7280" onclick="openEditModal('${tx.id}')"><div class="tx-ico" style="background:rgba(107,114,128,.15)">⚖️</div><div class="tx-info"><div class="tx-desc">${esc(tx.desc||'Reconciliation Adjustment')}</div><div class="tx-sub">Adjustment · ${esc(w?.name||'')}</div></div><div class="tx-amt adjust">${tx.amount>=0?'+':''}${fmtPHP(tx.amountPHP||tx.amount)}</div></div>`;
   }
-  // Income rows use ITYPES (via incomeType). Expense rows use CATS (via cat).
+  // Income rows resolve via income detail cats (legacy incomeType maps in). Expense rows use CATS (via cat).
   let c;
   if(tx.type==='income'){
-    const it=ITYPES.find(t=>t.id===tx.incomeType)||{label:'Income',icon:'💰'};
-    c={name:it.label,icon:it.icon,color:'#2cb67d'};
+    const ic=incCatOf(tx);
+    c={name:ic.name,icon:ic.icon,color:'#2cb67d'};
   } else {
     c=catById(tx.cat);
   }
+  const proj=tx.type==='expense'?projOf(tx):null;
   const iUSD=w?.currency==='USD';
   const amtStr=tx.type==='income'?`+${iUSD?fmtUSD(tx.amount)+' ':''}`+fmtPHP(tx.amountPHP||tx.amount):tx.amount?`-${iUSD?fmtUSD(tx.amount)+' ':''}`+fmtPHP(tx.amountPHP||tx.amount):'No amount';
   const amtCls=tx.type==='income'?'income':tx.amount?'expense':'zero';
-  return`<div class="tx" style="border-left-color:${c.color}" onclick="openEditModal('${tx.id}')"><div class="tx-ico" style="background:${c.color}1a">${c.icon}</div><div class="tx-info"><div class="tx-desc">${esc(tx.desc)}</div><div class="tx-sub">${c.name}${w?' · '+esc(w.name):''}</div></div><div class="tx-amt ${amtCls}">${amtStr}</div></div>`;
+  return`<div class="tx" style="border-left-color:${c.color}" onclick="openEditModal('${tx.id}')"><div class="tx-ico" style="background:${c.color}1a">${c.icon}</div><div class="tx-info"><div class="tx-desc">${esc(tx.desc)}</div><div class="tx-sub">${c.name}${proj?' · <span style="color:var(--accent-l)">#'+esc(proj)+'</span>':''}${w?' · '+esc(w.name):''}</div></div><div class="tx-amt ${amtCls}">${amtStr}</div></div>`;
 }
 
 function setLT(t){logType=t;renderView();setTimeout(()=>document.getElementById('logInp')?.focus(),50);}
@@ -569,17 +636,20 @@ async function submitLog(){
     const walletId=document.getElementById('walInp')?.value;
     const w=wById(walletId);const cur=w?.currency||'PHP';
     if(!raw&&!amount){_savingTx=false;toast('Enter a description or amount.');return;}
-    await addTx({date,type:'expense',desc:desc||raw,amount,amountPHP:toPHP(amount,cur),cat:pendingCat||catId,walletId});
-    inp.value='';const ai=document.getElementById('amtInp');if(ai)ai.value='';
-    toast(`${catById(pendingCat||catId).icon} ${desc||raw}${amount?' — '+fmtPHP(toPHP(amount,cur)):''}`);
+    const cat=pendingCat||catId;
+    const projRaw=document.getElementById('projInp')?.value?.trim();
+    const project=projRaw||catById(cat).proj||null;
+    await addTx({date,type:'expense',desc:desc||raw,amount,amountPHP:toPHP(amount,cur),cat,tier:catTier(cat),...(project?{project}:{}),walletId});
+    inp.value='';const ai=document.getElementById('amtInp');if(ai)ai.value='';const pi=document.getElementById('projInp');if(pi)pi.value='';
+    toast(`${catById(cat).icon} ${desc||raw}${amount?' — '+fmtPHP(toPHP(amount,cur)):''}${project?' · #'+project:''}`);
   }else if(logType==='income'){
     const amount=Number(document.getElementById('incAmtInp')?.value);
     if(!amount){_savingTx=false;toast('Enter an amount.');return;}
     const walletId=document.getElementById('incWalInp')?.value;
-    const incomeType=document.getElementById('incTypeInp')?.value||'other';
+    const incomeType=document.getElementById('incTypeInp')?.value||'incother';
     const desc=inp.value.trim()||ITYPES.find(t=>t.id===incomeType)?.label||'Income';
     const w=wById(walletId);const amountPHP=toPHP(amount,w?.currency||'PHP');
-    await addTx({date,type:'income',desc,amount,amountPHP,cat:'other',walletId,incomeType});
+    await addTx({date,type:'income',desc,amount,amountPHP,cat:incomeType,tier:'income',walletId,incomeType});
     inp.value='';document.getElementById('incAmtInp').value='';
     toast(`💰 +${fmtPHP(amountPHP)} logged`);
   }else{
@@ -589,7 +659,7 @@ async function submitLog(){
     const toWalletId=document.getElementById('toInp')?.value;
     if(fromWalletId===toWalletId){_savingTx=false;toast('Pick two different wallets.');return;}
     const desc=inp.value.trim()||'Transfer';
-    await addTx({date,type:'transfer',desc,amount,amountPHP:amount,cat:'other',fromWalletId,toWalletId});
+    await addTx({date,type:'transfer',desc,amount,amountPHP:amount,cat:'transfer',tier:'flow',fromWalletId,toWalletId});
     inp.value='';document.getElementById('trAmtInp').value='';
     const fw=wById(fromWalletId),tw=wById(toWalletId);
     toast(`↔ ${fw?.name} → ${tw?.name} — ${fmtPHP(amount)}`);
@@ -598,15 +668,37 @@ async function submitLog(){
 }
 
 // ── STATS VIEW ────────────────────────────
+// Split: Spending (Fixed/Variable/Discretionary) vs Income vs Flow. Flow & Adjustment never pollute the spend chart.
+function statsSpendTxs(month){return data.transactions.filter(t=>!t.deleted&&t.date.slice(0,7)===month&&isSpend(t)&&(statsProjIncl||!projOf(t)))}
 function buildStats(){
-  const exps=data.transactions.filter(t=>!t.deleted&&t.type==='expense'&&t.date.slice(0,7)===statsMonth);
-  const incs=data.transactions.filter(t=>!t.deleted&&t.type==='income'&&t.date.slice(0,7)===statsMonth);
-  const spent=exps.reduce((s,t)=>s+(Number(t.amountPHP)||0),0);
-  const inc=incs.reduce((s,t)=>s+(Number(t.amountPHP)||0),0)||0;
-  const saved=inc-spent;const pct=inc>0?Math.round((saved/inc)*100):null;
-  const catTots={};exps.forEach(t=>{catTots[t.cat]=(catTots[t.cat]||0)+(Number(t.amountPHP)||0);});
+  const amt=t=>Number(t.amountPHP)||0;
+  const mtx=data.transactions.filter(t=>!t.deleted&&t.date.slice(0,7)===statsMonth);
+  const spendAll=mtx.filter(isSpend);
+  const spendTxs=statsProjIncl?spendAll:spendAll.filter(t=>!projOf(t));
+  const spent=spendTxs.reduce((s,t)=>s+amt(t),0);
+  const spentAll=spendAll.reduce((s,t)=>s+amt(t),0);
+  const projM=spendAll.filter(t=>projOf(t)).reduce((s,t)=>s+amt(t),0);
+  const incs=mtx.filter(t=>t.type==='income'&&tierOf(t)==='income');
+  const inc=incs.reduce((s,t)=>s+amt(t),0);
+  const saved=inc-spentAll;const pct=inc>0?Math.round((saved/inc)*100):null;
+  // Spending by category + by tier (run-rate view honors the project toggle)
+  const catTots={};spendTxs.forEach(t=>{const cid=canonCat(t.cat);catTots[cid]=(catTots[cid]||0)+amt(t);});
   const usedCats=CATS.filter(c=>catTots[c.id]).sort((a,b)=>catTots[b.id]-catTots[a.id]);
   const maxAmt=usedCats.length?catTots[usedCats[0].id]:1;
+  const tierTots={fixed:0,variable:0,discretionary:0};
+  spendTxs.forEach(t=>{const ti=tierOf(t);if(tierTots[ti]!==undefined)tierTots[ti]+=amt(t);});
+  // Income by detail cat
+  const incTots={};incs.forEach(t=>{const c=incCatOf(t);incTots[c.id]=(incTots[c.id]||0)+amt(t);});
+  const usedInc=CATS.filter(c=>incTots[c.id]).sort((a,b)=>incTots[b.id]-incTots[a.id]);
+  // Flow: transfers + flow-categorized money movements
+  const flows=mtx.filter(t=>t.type!=='adjustment'&&tierOf(t)==='flow');
+  const flowTots={};flows.forEach(t=>{const cid=catById(t.cat).tier==='flow'?canonCat(t.cat):'transfer';flowTots[cid]=(flowTots[cid]||0)+amt(t);});
+  const usedFlow=CATS.filter(c=>flowTots[c.id]);
+  const flowTot=flows.reduce((s,t)=>s+amt(t),0);
+  const adjTot=mtx.filter(t=>tierOf(t)==='adjustment').reduce((s,t)=>s+amt(t),0);
+  // Projects: orthogonal view — spend stays in its real category, summed here across categories
+  const projTots={};
+  data.transactions.filter(t=>!t.deleted&&isSpend(t)).forEach(t=>{const p=projOf(t);if(!p)return;projTots[p]=projTots[p]||{m:0,all:0};projTots[p].all+=amt(t);if(t.date.slice(0,7)===statsMonth)projTots[p].m+=amt(t);});
   const spikes=detectSpikes(statsMonth);
   return`
     <div class="mnav">
@@ -615,24 +707,44 @@ function buildStats(){
       <button class="mnav-arr" onclick="chgSM(1)">›</button>
     </div>
     <div class="srow">
-      <div class="scard"><div class="s-lbl">Spent</div><div class="s-val red">${fmtPHP(spent)}</div><div class="s-sub">${exps.length} txns</div></div>
+      <div class="scard"><div class="s-lbl">Spending</div><div class="s-val red">${fmtPHP(spent)}</div><div class="s-sub">${spendTxs.length} txns${!statsProjIncl&&projM?` · proj hidden`:''}</div></div>
+      <div class="scard"><div class="s-lbl">Income</div><div class="s-val green">${fmtPHP(inc)}</div><div class="s-sub">${incs.length} txns</div></div>
       <div class="scard"><div class="s-lbl">Saved</div><div class="s-val ${saved>=0?'green':'red'}">${pct!==null?pct+'%':'—'}</div><div class="s-sub">${fmtPHP(Math.abs(saved))}</div></div>
     </div>
-    ${usedCats.length?`
-    <div class="card"><div class="card-title">By Category</div><div class="chart-wrap" style="height:195px"><canvas id="catChart"></canvas></div></div>
+    ${spent>0?`
+    <div class="card"><div class="card-title">Where Can I Cut — Fixed / Variable / Discretionary</div>
+      ${['fixed','variable','discretionary'].map(tid=>{const t=tierById(tid);const v=tierTots[tid];const share=spent>0?Math.round(v/spent*100):0;
+        return`<div class="cat-row"><div class="cat-ico" style="background:${t.color}1a;color:${t.color};font-size:12px;font-weight:800">${share}%</div><div class="cat-info"><div class="cat-nm">${t.label} <span style="color:var(--muted);font-weight:400;font-size:11px">· ${t.blurb}</span></div><div class="cat-bar"><div class="cat-fill" style="width:${share}%;background:${t.color}"></div></div></div><div class="cat-amt">${fmtPHP(v)}</div></div>`;}).join('')}
+    </div>
+    <div class="card"><div class="card-title">Spending by Category</div><div class="chart-wrap" style="height:195px"><canvas id="catChart"></canvas></div></div>
     <div class="card"><div class="card-title">Breakdown</div>
-      ${usedCats.map(c=>`<div class="cat-row"><div class="cat-ico" style="background:${c.color}1a">${c.icon}</div><div class="cat-info"><div class="cat-nm">${c.name}</div><div class="cat-bar"><div class="cat-fill" style="width:${Math.round(catTots[c.id]/maxAmt*100)}%;background:${c.color}"></div></div></div><div class="cat-amt">${fmtPHP(catTots[c.id])}</div></div>`).join('')}
-    </div>`:`<div class="empty"><div class="empty-ico">📊</div><div class="empty-txt">No expenses this month</div></div>`}
+      ${usedCats.map(c=>`<div class="cat-row"><div class="cat-ico" style="background:${c.color}1a">${c.icon}</div><div class="cat-info"><div class="cat-nm">${c.name} <span class="tier-chip" style="background:${tierById(c.tier).color}22;color:${tierById(c.tier).color}">${tierById(c.tier).label}</span></div><div class="cat-bar"><div class="cat-fill" style="width:${Math.round(catTots[c.id]/maxAmt*100)}%;background:${c.color}"></div></div></div><div class="cat-amt">${fmtPHP(catTots[c.id])}</div></div>`).join('')}
+    </div>`:`<div class="empty"><div class="empty-ico">📊</div><div class="empty-txt">No spending this month</div></div>`}
+    ${Object.keys(projTots).length?`
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:13px"><div class="card-title" style="margin-bottom:0">Projects</div><button class="fx-btn" onclick="toggleProjIncl()">${statsProjIncl?'✓ counted in spending':'hidden from spending'}</button></div>
+      ${Object.entries(projTots).sort((a,b)=>b[1].all-a[1].all).map(([p,v])=>`<div class="proj-row"><div><div style="font-weight:700">#${esc(p)}</div><div style="font-size:11px;color:var(--muted)">All-time ${fmtPHP(v.all)}</div></div><div class="cat-amt">${v.m?fmtPHP(v.m):'—'}<span style="color:var(--muted);font-size:11px;font-weight:400"> this month</span></div></div>`).join('')}
+    </div>`:''}
+    ${usedInc.length?`
+    <div class="card"><div class="card-title">Income — ${fmtPHP(inc)}</div>
+      ${usedInc.map(c=>`<div class="cat-row"><div class="cat-ico" style="background:${c.color}1a">${c.icon}</div><div class="cat-info"><div class="cat-nm">${c.name}</div></div><div class="cat-amt" style="color:var(--green)">+${fmtPHP(incTots[c.id])}</div></div>`).join('')}
+    </div>`:''}
+    ${usedFlow.length?`
+    <div class="card"><div class="card-title">Flow — ${fmtPHP(flowTot)} moved · not spending</div>
+      ${usedFlow.map(c=>`<div class="cat-row"><div class="cat-ico" style="background:${c.color}1a">${c.icon}</div><div class="cat-info"><div class="cat-nm">${c.name}</div></div><div class="cat-amt" style="color:var(--blue)">${fmtPHP(flowTots[c.id])}</div></div>`).join('')}
+    </div>`:''}
+    ${adjTot?`<div style="margin:0 13px 10px;font-size:12px;color:var(--muted);text-align:center">⚖️ Recon adjustments this month: ${adjTot>0?'+':''}${fmtPHP(adjTot)}</div>`:''}
     ${spikes.length?`<div class="card"><div class="card-title">⚠️ Unusual Spending</div>${spikes.map(s=>`<div class="spike-item"><div><div style="font-weight:700">${catById(s.catId).icon} ${catById(s.catId).name}</div><div style="font-size:11px;color:var(--muted)">${fmtPHP(Math.round(s.avg))} avg → ${fmtPHP(s.current)}</div></div><span class="spike-tag">+${s.pct}%</span></div>`).join('')}</div>`:''}
     <div class="gap"></div>`;
 }
 function chgSM(d){const[y,m]=statsMonth.split('-').map(Number);const dt=new Date(y,m-1+d,1);statsMonth=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');destroyCharts();renderView();updateHdr();}
+function toggleProjIncl(){statsProjIncl=!statsProjIncl;localStorage.setItem('statsProjIncl',statsProjIncl?'1':'0');destroyCharts();renderView();updateHdr();}
 function detectSpikes(month){
-  const cur={};data.transactions.filter(t=>!t.deleted&&t.type==='expense'&&t.date.slice(0,7)===month).forEach(t=>{cur[t.cat]=(cur[t.cat]||0)+(Number(t.amountPHP)||0);});
+  const cur={};statsSpendTxs(month).forEach(t=>{const cid=canonCat(t.cat);cur[cid]=(cur[cid]||0)+(Number(t.amountPHP)||0);});
   const spikes=[];
   for(const[cid,current]of Object.entries(cur)){
     const prevMs=[-3,-2,-1].map(d=>{const dt=new Date(month+'-01');dt.setMonth(dt.getMonth()+d);return dt.toISOString().slice(0,7);});
-    const vals=prevMs.map(m=>data.transactions.filter(t=>!t.deleted&&t.type==='expense'&&t.date.slice(0,7)===m&&t.cat===cid).reduce((s,t)=>s+(Number(t.amountPHP)||0),0)).filter(v=>v>0);
+    const vals=prevMs.map(m=>statsSpendTxs(m).filter(t=>canonCat(t.cat)===cid).reduce((s,t)=>s+(Number(t.amountPHP)||0),0)).filter(v=>v>0);
     if(vals.length<2)continue;
     const avg=vals.reduce((s,v)=>s+v,0)/vals.length;
     const pct=Math.round(((current-avg)/avg)*100);
@@ -642,8 +754,7 @@ function detectSpikes(month){
 }
 function initStatsChart(){
   const canvas=document.getElementById('catChart');if(!canvas)return;
-  const exps=data.transactions.filter(t=>!t.deleted&&t.type==='expense'&&t.date.slice(0,7)===statsMonth);
-  const catTots={};exps.forEach(t=>{catTots[t.cat]=(catTots[t.cat]||0)+(Number(t.amountPHP)||0);});
+  const catTots={};statsSpendTxs(statsMonth).forEach(t=>{const cid=canonCat(t.cat);catTots[cid]=(catTots[cid]||0)+(Number(t.amountPHP)||0);});
   const used=CATS.filter(c=>catTots[c.id]);if(!used.length)return;
   charts.cat=new Chart(canvas,{type:'doughnut',data:{labels:used.map(c=>`${c.icon} ${c.name}`),datasets:[{data:used.map(c=>catTots[c.id]),backgroundColor:used.map(c=>c.color),borderWidth:0,hoverOffset:8}]},options:{responsive:true,maintainAspectRatio:false,cutout:'62%',plugins:{legend:{position:'right',labels:{color:'#9997b5',font:{size:11},boxWidth:11,padding:5}},tooltip:{callbacks:{label:ctx=>` ${fmtPHP(ctx.raw)}`}}}}});
 }
@@ -759,7 +870,7 @@ function buildSettings(){
     <div class="set-row"><div><div class="set-lbl">Export Backup</div><div class="set-sub">Download as JSON</div></div><button class="set-btn" onclick="exportData()">Export</button></div>
     <div class="set-row"><div><div class="set-lbl">Import Backup</div><div class="set-sub">Restore from JSON</div></div><button class="set-btn" onclick="importData()">Import</button></div>
     <div class="set-sec">About</div>
-    <div class="set-row"><div><div class="set-lbl">Version</div><div class="set-sub">2026.06.06-b2 — Stats nav fix + Drive reconnect + iOS setup-code</div></div></div>
+    <div class="set-row"><div><div class="set-lbl">Version</div><div class="set-sub">2026.06.10-c1 — category redesign: tiers, projects, Stats split</div></div></div>
     <div class="gap"></div>`;
 }
 async function setSetting(k,v){data.settings[k]=k==='monthlyIncome'?(parseFloat(v)||0):v;await save();updateHdr();}
@@ -774,31 +885,39 @@ function openM(html){document.getElementById('MD').innerHTML=`<div class="mdh"><
 function closeM(){document.getElementById('MO').classList.add('hidden');reconImages=[];}
 function handleOC(e){if(e.target.id==='MO')closeM();}
 
-// Category picker
+// Category picker — grouped by tier
 function openCatPicker(){
-  openM(`<div class="mdt">Category</div><div class="cat-grid">${CATS.filter(c=>c.id!=='adjust').map(c=>`<div class="co ${c.id===pendingCat?'sel':''}" onclick="pickCat('${c.id}')"><span style="font-size:19px">${c.icon}</span><span>${c.name}</span></div>`).join('')}</div><div class="ma"><button class="mb cancel" onclick="closeM()">Cancel</button></div>`);
+  const pickerTiers=['discretionary','variable','fixed','flow'];
+  openM(`<div class="mdt">Category</div>${pickerTiers.map(tid=>{
+    const t=tierById(tid);const cats=CATS.filter(c=>c.tier===tid);
+    return`<div class="tier-hdr" style="color:${t.color}">${t.label}<span class="tier-sub">${t.blurb}</span></div>
+      <div class="cat-grid" style="margin-bottom:4px">${cats.map(c=>`<div class="co ${c.id===pendingCat?'sel':''}" onclick="pickCat('${c.id}')"><span style="font-size:19px">${c.icon}</span><span>${c.name}</span></div>`).join('')}</div>`;
+  }).join('')}<div class="ma"><button class="mb cancel" onclick="closeM()">Cancel</button></div>`);
 }
+// <select> options grouped by tier (for the edit modal)
+function catSelOpts(selId,tiers){return tiers.map(tid=>{const t=tierById(tid);return`<optgroup label="${t.label}">${CATS.filter(c=>c.tier===tid).map(c=>`<option value="${c.id}" ${c.id===selId?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</optgroup>`;}).join('')}
 function pickCat(id){pendingCat=id;const c=catById(id);const ico=document.getElementById('catIco');const nm=document.getElementById('catNm');if(ico)ico.textContent=c.icon;if(nm)nm.textContent=c.name;closeM();}
 
 // Edit transaction
 function openEditModal(id){
   const tx=data.transactions.find(t=>t.id===id);if(!tx)return;
   const wOpts=data.wallets.map(w=>`<option value="${w.id}" ${w.id===tx.walletId?'selected':''}>${w.icon||''} ${esc(w.name)}</option>`).join('');
-  // Income → show ITYPES dropdown bound to tx.incomeType.
-  // Expense/adjustment → show CATS dropdown bound to tx.cat (as before).
+  // Income → income detail cats. Adjustment → write-off/write-on. Expense → spend + flow cats, grouped by tier.
   // Transfer → no category field.
-  let catField='';
+  let catField='',projField='';
   if(tx.type==='income'){
-    const iOpts=ITYPES.map(t=>`<option value="${t.id}" ${t.id===tx.incomeType?'selected':''}>${t.icon} ${t.label}</option>`).join('');
-    catField=`<div class="mf"><div class="ml">Income Type</div><select class="ms" id="eInc">${iOpts}</select></div>`;
+    catField=`<div class="mf"><div class="ml">Income Type</div><select class="ms" id="eCat">${catSelOpts(incCatOf(tx).id,['income'])}</select></div>`;
+  }else if(tx.type==='adjustment'){
+    catField=`<div class="mf"><div class="ml">Adjustment</div><select class="ms" id="eCat">${catSelOpts(canonCat(tx.cat)==='writeon'?'writeon':(Number(tx.amount)>=0?'writeon':'writeoff'),['adjustment'])}</select></div>`;
   }else if(tx.type!=='transfer'){
-    const cOpts=CATS.map(c=>`<option value="${c.id}" ${c.id===tx.cat?'selected':''}>${c.icon} ${c.name}</option>`).join('');
-    catField=`<div class="mf"><div class="ml">Category</div><select class="ms" id="eCat">${cOpts}</select></div>`;
+    catField=`<div class="mf"><div class="ml">Category</div><select class="ms" id="eCat">${catSelOpts(canonCat(tx.cat),['discretionary','variable','fixed','flow'])}</select></div>`;
+    projField=`<div class="mf"><div class="ml">Project (optional)</div><input class="mi" id="eProj" list="projList" value="${esc(tx.project||'')}" placeholder="e.g. southbay"></div>`;
   }
   openM(`<div class="mdt">Edit</div>
     <div class="mf"><div class="ml">Description</div><input class="mi" id="eDesc" value="${esc(tx.desc||'')}"></div>
     <div class="mf"><div class="ml">Amount</div><input class="mi" id="eAmt" type="number" value="${tx.amount||''}"></div>
     ${catField}
+    ${projField}
     ${tx.type!=='transfer'?`<div class="mf"><div class="ml">Wallet</div><select class="ms" id="eWal">${wOpts}</select></div>`:''}
     <div class="mf"><div class="ml">Date</div><input class="mi" id="eDate" type="date" value="${tx.date}"></div>
     <div class="ma"><button class="mb danger" onclick="doDelTx('${id}')">Delete</button><button class="mb cancel" onclick="closeM()">Cancel</button><button class="mb primary" onclick="doSaveTx('${id}')">Save</button></div>`);
@@ -815,13 +934,14 @@ async function doSaveTx(id){
     walletId,
     date:document.getElementById('eDate')?.value||tx.date
   };
-  if(tx.type==='income'){
-    // Income is categorized by incomeType. Keep cat pinned to 'other' by design.
-    updates.incomeType=document.getElementById('eInc')?.value||tx.incomeType||'other';
-    updates.cat='other';
-  }else{
-    updates.cat=document.getElementById('eCat')?.value||tx.cat;
+  if(tx.type!=='transfer'){
+    const cat=document.getElementById('eCat')?.value||canonCat(tx.cat);
+    updates.cat=cat;
+    updates.tier=catTier(cat);
+    if(tx.type==='income')updates.incomeType=cat; // keep legacy field aligned
   }
+  const projEl=document.getElementById('eProj');
+  if(projEl){const p=projEl.value.trim();updates.project=p||(catById(updates.cat).proj||null);}
   await updTx(id,updates);
   closeM();toast('Updated!');renderView();updateHdr();
 }
@@ -965,8 +1085,10 @@ async function doWriteOff(walletId, loggedBal){
   const real=parseFloat(document.getElementById('realBal')?.value);
   if(isNaN(real)){toast('Enter the real balance first.');return;}
   const diff=real-loggedBal;if(diff===0)return;
-  await addTx({date:today(),type:'adjustment',desc:`Reconciliation write-off (${diff>0?'+':''}${fmtPHP(diff)})`,amount:diff,amountPHP:diff,cat:'adjust',walletId});
-  closeM();toast(`✅ ${fmtPHP(Math.abs(diff))} written off.`);renderView();updateHdr();
+  // Computed below target → write-on (+). Computed above target → write-off (−). Per spec §6.
+  const cat=diff>0?'writeon':'writeoff';
+  await addTx({date:today(),type:'adjustment',desc:`Recon ${diff>0?'write-on':'write-off'}: adjustment ${diff>0?'+':''}${diff.toFixed(2)}`,amount:diff,amountPHP:diff,cat,tier:'adjustment',walletId});
+  closeM();toast(`✅ ${fmtPHP(Math.abs(diff))} ${diff>0?'written on':'written off'}.`);renderView();updateHdr();
 }
 
 // Investment modal
@@ -1104,4 +1226,4 @@ if('serviceWorker' in navigator){
 }
 </script>
 </body>
-</html>
+  </html>
