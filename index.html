@@ -375,7 +375,7 @@ async function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open('p
 async function dbGet(k){const db=await openDB();return new Promise((res,rej)=>{const r=db.transaction('kv','readonly').objectStore('kv').get(k);r.onsuccess=e=>res(e.target.result);r.onerror=rej;})}
 async function dbSet(k,v){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction('kv','readwrite');tx.objectStore('kv').put(v,k);tx.oncomplete=res;tx.onerror=rej;})}
 const WORKER_BASE='https://claude-proxy.raffy-tanpho.workers.dev';
-let gdriveSession=null,gdriveRefreshTimer=null;
+let gdriveSession=null,gdriveRefreshTimer=null,driveChecking=false;
 function scheduleTokenRefresh(expiresInMs){if(gdriveRefreshTimer)clearTimeout(gdriveRefreshTimer);const refreshIn=Math.max(expiresInMs-5*60*1000,30000);gdriveRefreshTimer=setTimeout(()=>{getDriveToken();},refreshIn);}
 async function getDriveToken(){if(!gdriveSession)gdriveSession=await dbGet('driveSession');if(!gdriveSession)return false;try{const r=await fetch(WORKER_BASE+'/drive/token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:gdriveSession})});if(!r.ok){if(r.status===401){gdriveSession=null;gdriveToken=null;await dbSet('driveSession',null);}return false;}const j=await r.json();if(!j.access_token)return false;gdriveToken=j.access_token;const ms=(j.expires_in||3599)*1000;await dbSet('gdriveExpiry',Date.now()+ms);scheduleTokenRefresh(ms);return true;}catch(e){return false;}}
 async function maybeRefreshToken(){if(!gdriveSession&&!(gdriveSession=await dbGet('driveSession')))return;const expiry=await dbGet('gdriveExpiry');if(!gdriveToken||!expiry||Date.now()>expiry-60000){const ok=await getDriveToken();if(ok)await loadFromFolder();}}
@@ -500,7 +500,7 @@ function updateHdr(){
   const nw=netWorth(),m=view==='stats'?statsMonth:ym();
   const spent=mSpend(m),inc=mIncome(m)||0;
   const saved=inc-spent,pct=inc>0?Math.round((saved/inc)*100):null;
-  const driveBanner=(!gdriveToken||!gdriveFileId)?`<div style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);border-radius:8px;padding:7px 10px;margin-bottom:10px;font-size:12px;color:#fca5a5;display:flex;align-items:center;justify-content:space-between;gap:8px"><span>⚠️ Not syncing to Drive — changes are local only</span><button onclick="connectFolder()" style="background:rgba(239,68,68,.3);border:none;border-radius:6px;color:#fca5a5;font-size:11px;font-weight:700;padding:3px 8px;cursor:pointer">Reconnect</button></div>`:'';
+  const driveBanner=driveChecking?`<div style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:7px 10px;margin-bottom:10px;font-size:12px;color:rgba(255,255,255,.7)">⏳ Checking Drive sync…</div>`:(!gdriveToken||!gdriveFileId)?`<div style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);border-radius:8px;padding:7px 10px;margin-bottom:10px;font-size:12px;color:#fca5a5;display:flex;align-items:center;justify-content:space-between;gap:8px"><span>⚠️ Not syncing to Drive — changes are local only</span><button onclick="connectFolder()" style="background:rgba(239,68,68,.3);border:none;border-radius:6px;color:#fca5a5;font-size:11px;font-weight:700;padding:3px 8px;cursor:pointer">Reconnect</button></div>`:'';
   document.getElementById('header').innerHTML=`
     ${driveBanner}
     <div style="display:flex;align-items:flex-start;justify-content:space-between">
@@ -1202,17 +1202,21 @@ async function migrateData(){
 // ═══ INIT ════════════════════════════════════════════════════════════
 async function init(){
   loadLocal();
-  await tryRestoreFolder();
   await migrateGoals();
   await migrateData();
+  driveChecking=!!(await dbGet('driveSession'));
+  updateHdr();
+  renderView();
+  // Drive restore + sync in the background; re-migrate merged data, then re-render.
+  tryRestoreFolder()
+    .then(async()=>{await migrateGoals();await migrateData();})
+    .finally(()=>{driveChecking=false;updateHdr();renderView();});
   if(!data.settings.usdRateDate||data.settings.usdRateDate<today())fetchRate();
   // Auto-refresh insights once per day
   if(data.settings.proxyUrl&&data.insights?.lastUpdated){
     const lastDay=new Date(data.insights.lastUpdated).toISOString().slice(0,10);
     if(lastDay<today())setTimeout(generateInsights,3000);
   }
-  updateHdr();
-  renderView();
 }
 init();
 
