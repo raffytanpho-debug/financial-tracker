@@ -1,0 +1,4 @@
+# Normalize line endings to LF for all text files.
+# Prevents Windows editors from flipping the working tree to CRLF and
+# producing whole-file phantom diffs on commit.
+* text=auto eol=lf
