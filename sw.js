@@ -1,4 +1,4 @@
-const CACHE = '₱tracker-v17';
+const CACHE = '₱tracker-v18';
 // Static assets cached long-term. index.html is intentionally NOT precached
 // here; instead the fetch handler keeps a fresh copy on every successful load
 // (network-first) so online users never get stale code.
